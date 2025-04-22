@@ -1,0 +1,47 @@
+#ファイルネーム制限
+--windows-filenames
+--trim-filenames 250
+#ファイル名リージョン
+--add-header Accept-Language:ja-JP
+
+#サムネイルダウンロード
+--write-thumbnail
+#サムネイル埋め込み
+#--embed-thumbnail
+
+#--sub-lang ja
+--write-sub
+--all-subs
+--embed-subs
+--embed-metadata
+-f ba+bv/b
+-S res,vcodec:vp9.2,quality
+--progress
+#実行完了後コマンド実行
+#--exec "bash ~/shellscript/LINEmessage.sh yt-dlp実行完了-[%(id)q]／｛%(channel)q｝／【%(playlist)q】／（%(title)q）"
+#--exec "bash ~/shellscript/LINEmessage.sh ファイル名・%(title)q\ [%(id)q].%(ext)q"
+
+#拡張子指定(最後にコンテナを変更します)
+#--merge-output-format webm
+
+#aria2で高速ダウンロードするオプション
+#(ダウンロード進捗が分からなくなります)
+--downloader aria2c
+--downloader-args aria2c:"-x8 -s8 --retry-wait=1"
+
+#ファイル名(プレイリスト名/数字 - タイトル [動画ID].拡張子)
+#-o "%(playlist)s/%(playlist_index)s - %(title)s [%(id)s].%(ext)s"
+#-o "%(channel)s/%(title)s [%(id)s].%(ext)s"
+-o "%(playlist)s/%(title)s [%(id)s].%(ext)s"
+#-o "%(title)s.%(ext)s"
+
+#ファイル名関連でエラー吐いたとき用
+#-o "%(channel)s/%(id)s.%(ext)s"
+#-o "%(id)s.%(ext)s"
+
+#ダウンロードファイルキャッシュ場
+#(どれか使って)
+#-P temp:/tmp
+-P temp:/mnt/ramdisk
+#-P temp:/media/syameimarukoa/Linux_Data/swap
+#-P temp:/usr/yt-dlp_tmp
