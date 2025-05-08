@@ -18,13 +18,7 @@
 -S res,vcodec:vp9.2,quality
 --progress
 #実行完了後コマンド実行
---exec "bash ~/shellscript/Discord_Message.sh ================================================="
---exec "bash ~/shellscript/Discord_Message.sh yt-dlp実行完了-[%(id)q]"
---exec "bash ~/shellscript/Discord_Message.sh ｛%(channel)q｝"
---exec "bash ~/shellscript/Discord_Message.sh 【%(playlist)q】"
---exec "bash ~/shellscript/Discord_Message.sh （%(title)q）"
---exec "bash ~/shellscript/Discord_Message.sh ファイル名・%(title)q\\\\\\\\\\\\\\\\ [%(id)q].%(ext)q"
---exec "bash ~/shellscript/Discord_Message.sh ================================================="
+--exec 'bash ~/shellscript/Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "タイトル→%(title)s" "ファイル名→%(title)s [%(id)s].%(ext)s"'
 
 #拡張子指定(最後にコンテナを変更します)
 #--merge-output-format webm
