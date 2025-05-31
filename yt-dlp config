@@ -18,7 +18,7 @@
 -S res,vcodec:vp9.2,quality
 --progress
 #実行完了後コマンド実行
---exec 'bash ~/shellscript/Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "プレイリストNo.%(playlist_index)s/%(n_entries)s %(autonumber)s" "タイトル→%(title)s" "ファイル情報→（長さ%(duration_string)s）,（サイズ%(filesize)s or %(filesize_approx)s）,（解像度%(resolution)s）,（%(fps)sFPS）,（ビットレート%(tbr)sKbps）,（%(release_date)s公開）" "保存ファイル名→%(filename)s"'
+--exec 'Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "プレイリストNo.%(playlist_index)s/%(n_entries)s %(autonumber)s" "タイトル→%(title)s" "ファイル情報→（長さ%(duration_string)s）,（サイズ%(filesize)s or %(filesize_approx)s）,（解像度%(resolution)s）,（%(fps)sFPS）,（ビットレート%(tbr)sKbps）,（%(release_date)s公開）" "保存ファイル名→%(filename)s"'
 
 #拡張子指定(最後にコンテナを変更します)
 #--merge-output-format webm
@@ -40,7 +40,7 @@
 
 #ダウンロードファイルキャッシュ場
 #(どれか使って)
-#-P temp:/tmp
--P temp:/mnt/ramdisk
+-P temp:/tmp
+#-P temp:/mnt/ramdisk
 #-P temp:/media/syameimarukoa/Linux_Data/swap
 #-P temp:/usr/yt-dlp_tmp
