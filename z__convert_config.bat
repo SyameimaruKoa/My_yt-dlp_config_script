@@ -1,6 +1,6 @@
 @echo off
 rem [2025-04-24] ユーザー指示: WindowsバッチはShift-JIS (CP932) で作成
-chcp 932 > nul
+chcp 65001 > nul
 
 rem 遅延環境変数の展開を有効にする (文字列置換のため)
 setlocal enabledelayedexpansion
