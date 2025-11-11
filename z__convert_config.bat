@@ -1,62 +1,68 @@
 @echo off
-chcp 65001 > nul
+rem [2025-04-24] ƒ†[ƒU[ŽwŽ¦: Windowsƒoƒbƒ`‚ÍShift-JIS (CP932) ‚Åì¬
+rem ššš ƒtƒ@ƒCƒ‹‚Ì•¶ŽšƒR[ƒh‚ð Shift-JIS (ANSI) ‚É‚µ‚Ä•Û‘¶‚·‚é‚ñ‚¶‚á‚¼I ššš
+chcp 932 > nul
 
-rem é…å»¶ç’°å¢ƒå¤‰æ•°ã®å±•é–‹ã‚’æœ‰åŠ¹ã«ã™ã‚‹ (æ–‡å­—åˆ—ç½®æ›ã®ãŸã‚)
 setlocal enabledelayedexpansion
 
-rem --- è¨­å®š ---
+rem --- Ý’è ---
 SET "INPUT_FILE=yt-dlp config"
 SET "OUTPUT_FILE=win yt-dlp config"
-rem --- è¨­å®šã“ã“ã¾ã§ ---
+rem --- Ý’è‚±‚±‚Ü‚Å ---
 
-echo yt-dlp config å¤‰æ›ãƒãƒƒãƒã‚’èµ·å‹•ã—ãŸãžã€‚
-echo å…¥åŠ›: "%INPUT_FILE%"
-echo å‡ºåŠ›: "%OUTPUT_FILE%"
+echo yt-dlp config •ÏŠ·ƒoƒbƒ` (C³”Å) ‚ð‹N“®‚µ‚½‚¼B
+echo.
+echo “ü—Í: "%INPUT_FILE%"
+echo o—Í: "%OUTPUT_FILE%"
 echo ---
 
-rem å…¥åŠ›ãƒ•ã‚¡ã‚¤ãƒ«ã®å­˜åœ¨ç¢ºèª
+rem “ü—Íƒtƒ@ƒCƒ‹‚Ì‘¶ÝŠm”F
 if not exist "%INPUT_FILE%" (
-    echo ã‚¨ãƒ©ãƒ¼: å…¥åŠ›ãƒ•ã‚¡ã‚¤ãƒ« "%INPUT_FILE%" ãŒè¦‹ã¤ã‹ã‚‰ã‚“ãžã€‚ >&2
-    echo ã“ã®ãƒãƒƒãƒãƒ•ã‚¡ã‚¤ãƒ«ã¨åŒã˜ãƒ•ã‚©ãƒ«ãƒ€ã«ç½®ãã®ã˜ã‚ƒã€‚ >&2
-    echo ---
+    echo ƒGƒ‰[: “ü—Íƒtƒ@ƒCƒ‹ "%INPUT_FILE%" ‚ªŒ©‚Â‚©‚ç‚ñ‚¼I
+    echo ‚±‚Ìƒoƒbƒ`‚Æ“¯‚¶ƒtƒHƒ‹ƒ_‚É’u‚­‚Ì‚¶‚áB
+    echo.
     pause
     exit /b 1
 )
 
-rem å¤ã„å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚Œã°å‰Šé™¤ (ãƒ•ã‚¡ã‚¤ãƒ«åã«ã‚¹ãƒšãƒ¼ã‚¹ãŒã‚ã£ã¦ã‚‚ "%OUTPUT_FILE%" ã§å¯¾å¿œ)
+rem ŒÃ‚¢o—Íƒtƒ@ƒCƒ‹‚ª‚ ‚ê‚Îíœ
 if exist "%OUTPUT_FILE%" (
-    echo å¤ã„ "%OUTPUT_FILE%" ã‚’å‰Šé™¤ä¸­...
+    echo ŒÃ‚¢ "%OUTPUT_FILE%" ‚ðíœ’†...
     del "%OUTPUT_FILE%"
 )
 
-echo å¤‰æ›å‡¦ç†ã‚’é–‹å§‹ã™ã‚‹...
+echo •ÏŠ·ˆ—‚ðŠJŽn‚·‚é...
 
-rem 1è¡Œãšã¤èª­ã¿è¾¼ã‚“ã§å‡¦ç†
-rem [2025-09-06] Pythonã§ã¯ãªã„ãŒã€ãƒ«ãƒ¼ãƒ—å‡¦ç†
+rem 1s‚¸‚Â“Ç‚Ýž‚ñ‚Åˆ—
+rem [2025-09-06] Python‚Å‚Í‚È‚¢‚ªAƒ‹[ƒvˆ—
 for /f "usebackq tokens=* delims=" %%L in ("%INPUT_FILE%") do (
     set "line=%%L"
-
-    rem ãƒ«ãƒ¼ãƒ«1-B: --exec ã§å§‹ã¾ã‚‹è¡Œã‹ãƒã‚§ãƒƒã‚¯
-    rem (findstr ã® /B ã¯è¡Œé ­, /I ã¯å¤§æ–‡å­—å°æ–‡å­—ç„¡è¦–)
-    echo !line! | findstr /B /I /C:"--exec " > nul
     
-    if !errorlevel! equ 0 (
-        rem ã€ãƒ«ãƒ¼ãƒ«1-Bã€‘ --exec ã®è¡Œã¯ã‚³ãƒ¡ãƒ³ãƒˆã‚¢ã‚¦ãƒˆã™ã‚‹
+    rem ƒfƒtƒHƒ‹ƒg‚Íuˆ—‚µ‚È‚¢vƒtƒ‰ƒO
+    set "processed=false"
+
+    rem yƒ‹[ƒ‹1-Bz --exec ‚ÅŽn‚Ü‚és‚©ƒ`ƒFƒbƒN (æ“ª7•¶Žš‚Å”»’è)
+    rem findstr ‚Í“ÁŽê•¶Žš‚ÉŽã‚¢‚½‚ßAˆÀ‘S‚È•¶Žš—ñ”äŠr‚É•ÏX
+    if /I "!line:~0,7!" == "--exec " (
+        rem --exec ‚Ìs‚Í rem ‚ð•t‚¯‚Äo—Í
         echo rem !line! >> "%OUTPUT_FILE%"
-    ) else (
-        rem --exec ä»¥å¤–ã®è¡Œ
-        
-        rem ã€ãƒ«ãƒ¼ãƒ«3-Aã€‘ /tmp ã‚’ %TEMP% ã«ç½®æ›ã™ã‚‹
-        rem (ãã®ä»–ã®ãƒ«ãƒ¼ãƒ« 2-B, 4-A ã¯ã€Œä½•ã‚‚ã—ãªã„ã€ãªã®ã§å‡¦ç†ä¸è¦)
+        set "processed=true"
+    )
+
+    rem yƒ‹[ƒ‹3-Az /tmp ‚ð %TEMP% ‚É’uŠ·
+    rem (processed=false ‚Ìê‡‚Ì‚ÝA‚Â‚Ü‚è --exec ˆÈŠO‚Ìs‚ÅŽÀs)
+    if "!processed!" == "false" (
+        rem (‚»‚Ì‘¼‚Ìƒ‹[ƒ‹ 2-B, 4-A ‚Íu‰½‚à‚µ‚È‚¢v)
         set "line=!line:/tmp=%%TEMP%%!"
         
-        rem å¤‰æ›å¾Œã®è¡Œã‚’å‡ºåŠ›
+        rem •ÏŠ·Œã‚Ìs‚ðo—Í
         echo !line! >> "%OUTPUT_FILE%"
     )
 )
 
 echo ---
-echo å¤‰æ›å®Œäº†ã˜ã‚ƒï¼ "%OUTPUT_FILE%" ã‚’ç¢ºèªã›ã„ã€‚
-echo ã“ã®ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã¯è‡ªå‹•ã§é–‰ã˜ã‚‹ãžã€‚
+echo •ÏŠ·Š®—¹‚¶‚áI "%OUTPUT_FILE%" ‚ðŠm”F‚¹‚¢B
+echo ¡“x‚±‚»–â‘è‚È‚©‚ë‚¤I
+echo (‚±‚ÌƒEƒBƒ“ƒhƒE‚Í 5•bŒã‚ÉŽ©“®‚Å•Â‚¶‚é‚¼...)
 timeout /t 5 > nul
 exit /b 0
