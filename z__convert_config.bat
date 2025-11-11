@@ -10,8 +10,7 @@ SET "INPUT_FILE=yt-dlp config"
 SET "OUTPUT_FILE=win yt-dlp config"
 rem --- 設定ここまで ---
 
-echo yt-dlp config 変換バッチ (PowerShell版) を起動したぞ。
-echo 文字化けを直すために、今度は PowerShell の力を使うからの！
+echo yt-dlp config 変換バッチ (最終修正版) を起動したぞ。
 echo.
 echo 入力: "%INPUT_FILE%" (UTF-8と仮定)
 echo 出力: "%OUTPUT_FILE%" (UTF-8で保存)
@@ -28,10 +27,10 @@ if not exist "%INPUT_FILE%" (
 
 echo 変換処理 (PowerShell) を実行中...
 
-rem --- ここからが本体 ---
+rem --- ここからが本体 (★ rem を # に修正したぞ！) ---
 rem PowerShell を呼び出し、UTF-8で読み込み(Get-Content)、処理し、UTF-8で書き出す(Set-Content)
 rem [2025-09-24] ユーザー指示: PowerShellの活用
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Path '.\%INPUT_FILE%' -Encoding Utf8 | ForEach-Object { if ($_ -like '--exec *') { 'rem ' + $_ } else { $_ -replace '/tmp', '$env:TEMP' } } | Set-Content -Path '.\%OUTPUT_FILE%' -Encoding Utf8"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Content -Path '.\%INPUT_FILE%' -Encoding Utf8 | ForEach-Object { if ($_ -like '--exec *') { '# ' + $_ } else { $_ -replace '/tmp', '$env:TEMP' } } | Set-Content -Path '.\%OUTPUT_FILE%' -Encoding Utf8"
 rem --- ここまで ---
 
 if !errorlevel! neq 0 (
@@ -44,7 +43,7 @@ if !errorlevel! neq 0 (
 
 echo ---
 echo 変換完了じゃ！
-echo 今度こそ "%OUTPUT_FILE%" の文字化けは無いはずじゃ！
+echo 今度こそ "%OUTPUT_FILE%" を確認せい。--exec が # でコメントアウトされとるはずじゃ！
 echo (このウィンドウは 5秒後に自動で閉じるぞ...)
 timeout /t 5 > nul
 exit /b 0
