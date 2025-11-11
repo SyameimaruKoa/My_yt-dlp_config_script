@@ -1,5 +1,4 @@
 @echo off
-rem [2025-04-24] ユーザー指示: WindowsバッチはShift-JIS (CP932) で作成
 chcp 65001 > nul
 
 rem 遅延環境変数の展開を有効にする (文字列置換のため)
@@ -7,7 +6,6 @@ setlocal enabledelayedexpansion
 
 rem --- 設定 ---
 SET "INPUT_FILE=yt-dlp config"
-rem ★ここを変更したぞ★
 SET "OUTPUT_FILE=win yt-dlp config"
 rem --- 設定ここまで ---
 
