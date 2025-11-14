@@ -1,139 +1,181 @@
-<#
+﻿<#
 .SYNOPSIS
-    yt-dlp から 'after_download' で呼び出され、字幕の中身を判別するラッパーなのじゃ。
-.DESCRIPTION
-    (ユーザー指示 [2025-09-24] に基づくヘルプ実装)
-    拡張子が対象 (例: .srv3) なら中身を読み、<span> や <u> が含まれる場合のみ
-    YTSubConverter.exe で .ass ファイルに変換する。
-    変換成功後は、元の .srv3 ファイルを削除するぞ。
-.PARAMETER DownloadedFile
-    [必須] ダウンロードが完了したファイルのパス (yt-dlp から渡される)。
-.EXAMPLE
-    .\run_sub_converter.ps1 "C:\path\to\simple_lyrics.srv3" (-> 中身を読み、<span> が無いのでスキップ)
-    .\run_sub_converter.ps1 "C:\path\to\styled_caption.srv3" (-> 中身を読み、<span> を見つけて .ass に変換し、元の .srv3 を削除)
+    Subtitle converter wrapper called by yt-dlp
+.PARAMETER VideoPath
+    Path to the video file
 .NOTES
-    文字コード: UTF-8 で保存するんじゃぞ。
+    Encoding: UTF-8 with BOM
 #>
 param (
-    [Parameter(Mandatory = $true, Position = 0)]
-    [string]$DownloadedFile
+    [Parameter(Mandatory = $false, Position = 0)]
+    [string]$VideoPath,
+    [switch]$Help
 )
 
-#region --- 設定 ---
-# (ユーザー指示 [2025-09-24] #region 実装)
+$TargetExtensions = @(".srv3")
+$AssOutputExtension = ".ass"
+$SrtOutputExtension = ".srt"
 
-# YTSubConverter.exe のパス (このスクリプトと同じフォルダを仮定)
-$ConverterExePath = Join-Path $PSScriptRoot "YTSubConverter.exe"
-
-# ★★★ 変換対象か判別する拡張子 (小文字) ★★★
-$TargetExtensions = @(
-    ".srv3"
-    # ".srv2", ".ttml" なども対象にするならここに追加
-)
-
-# ★★★ 変換後の拡張子 ★★★
-$OutputExtension = ".ass"
-#endregion
-
-#region --- メイン処理 ---
-
-# 渡されたファイルの拡張子を小文字で取得
-$FileExtension = ""
-try {
-    $FileExtension = [System.IO.Path]::GetExtension($DownloadedFile).ToLower()
-}
-catch {
-    Write-Warning "渡されたパス ($DownloadedFile) の拡張子が取得できんかった。"
-    exit 0 # 何もせず終了
-}
-
-# 1. 変換対象の拡張子 (TargetExtensions) 以外なら、即座に終了
-if ([string]::IsNullOrEmpty($FileExtension) -or ($TargetExtensions -notcontains $FileExtension)) {
-    # (vtt, mp4, m4a, live_chat.json などはここで静かに終了する)
+if ($Help -or [string]::IsNullOrWhiteSpace($VideoPath)) {
+    Get-Help -Detailed $MyInvocation.MyCommand.Path
     exit 0
 }
 
-# 2. ここに来た = .srv3 など、中身を判別すべきファイル
-Write-Output "--- YTSubConverter (PowerShell) 実行判別 ---"
-
-# 必要なファイルの存在確認
-if (-not (Test-Path $ConverterExePath)) {
-    Write-Error "エラー: YTSubConverter.exe が見つからん！"
-    Write-Error "期待したパス: $ConverterExePath"
-    exit 1
-}
-if (-not (Test-Path $DownloadedFile)) {
-    Write-Error "エラー: yt-dlp から渡されたはずの字幕ファイルが見つからん！"
-    Write-Error "指定されたパス: $DownloadedFile"
-    exit 1
-}
-
-Write-Output "判別対象: $DownloadedFile"
-
-# 3. ファイルの中身を読み、スタイル (<span>) や ASR (<u>) を含むか判別する
-$FileContent = ""
-try {
-    # ファイルを UTF-8 として読み込む (YouTubeの字幕はUTF-8のはず)
-    $FileContent = Get-Content -Path $DownloadedFile -Encoding utf8 -Raw
-}
-catch {
-    Write-Error "エラー: 字幕ファイル ($DownloadedFile) の読み込みに失敗した。"
-    exit 1
-}
-
-# --- 変換すべきかどうかの判定 ---
-$NeedsConversion = $false
-if ($FileContent -match '<span') {
-    $NeedsConversion = $true
-    Write-Output "情報: <span> タグ (スタイル) を検出。YTSubConverter を実行します。"
-}
-elseif ($FileContent -match '<u') { 
-    $NeedsConversion = $true
-    Write-Output "情報: <u> タグ (ASR/強調) を検出。YTSubConverter を実行します。"
-}
-
-if ($NeedsConversion -eq $false) {
-    Write-Output "情報: ファイルは <span> や <u> を含まない単純なXML (Pタグのみ) と判断。"
-    Write-Output "情報: 変換をスキップします。" # そなたの動画は全てここに来るはずじゃ
-    Write-Output "-----------------------------------"
-    exit 0 # ★★★ スキップして正常終了 ★★★
-}
-
-# 4. 実行 (NeedsConversion が true の場合のみ)
-
-# (A) 出力ファイルパスを生成する (例: ...\video.ja.srv3 -> ...\video.ja.ass)
-$OutputSubtitleFile = [System.IO.Path]::ChangeExtension($DownloadedFile, $OutputExtension)
-
-Write-Output "出力ファイル: $OutputSubtitleFile"
-Write-Output "実行コマンド: & `"$ConverterExePath`" `"$DownloadedFile`" `"$OutputSubtitleFile`""
-
-try {
-    # (B) & 演算子 (call operator) で実行 (出力パスも渡す！)
-    & "$ConverterExePath" "$DownloadedFile" "$OutputSubtitleFile"
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "エラー: YTSubConverter.exe の実行に失敗したぞ (ExitCode: $LASTEXITCODE)。"
-        exit $LASTEXITCODE
+function Find-YTSubConverter {
+    param([string]$VideoDirectory)
+    $candidates = @()
+    if ($env:YTSC_PATH) {
+        if (Test-Path -LiteralPath $env:YTSC_PATH) {
+            if ((Get-Item -LiteralPath $env:YTSC_PATH) -is [System.IO.DirectoryInfo]) {
+                $candidates += (Join-Path $env:YTSC_PATH 'YTSubConverter.exe')
+            } else {
+                $candidates += $env:YTSC_PATH
+            }
+        }
     }
+    $candidates += (Join-Path $PSScriptRoot 'YTSubConverter.exe')
+    if ($VideoDirectory) {
+        $candidates += (Join-Path $VideoDirectory 'YTSubConverter.exe')
+    }
+    $cmd = Get-Command 'YTSubConverter.exe' -ErrorAction SilentlyContinue
+    if ($cmd) { $candidates += $cmd.Source }
+    foreach ($c in $candidates | Select-Object -Unique) {
+        if ([string]::IsNullOrWhiteSpace($c)) { continue }
+        if (Test-Path -LiteralPath $c) { return (Resolve-Path -LiteralPath $c).Path }
+    }
+    return $null
+}
 
-    Write-Output "変換完了じゃ。"
+function ConvertTo-SimpleSrt {
+    param([string]$InputFile, [string]$OutputFile)
+    [xml]$xml = Get-Content -LiteralPath $InputFile -Encoding utf8
+    $srtLines = @()
+    $index = 1
+    foreach ($p in $xml.timedtext.body.p) {
+        $startMs = [int]$p.t
+        $durationMs = [int]$p.d
+        $endMs = $startMs + $durationMs
+        $startTime = ConvertTo-SrtTime -Milliseconds $startMs
+        $endTime = ConvertTo-SrtTime -Milliseconds $endMs
+        $text = $p.InnerText.Trim()
+        if ([string]::IsNullOrWhiteSpace($text)) { continue }
+        $srtLines += $index
+        $srtLines += "$startTime --> $endTime"
+        $srtLines += $text
+        $srtLines += ""
+        $index++
+    }
+    $srtLines | Out-File -LiteralPath $OutputFile -Encoding utf8 -Force
+}
+
+function ConvertTo-SrtTime {
+    param([int]$Milliseconds)
+    $hours = [int][math]::Floor($Milliseconds / 3600000)
+    $minutes = [int][math]::Floor(($Milliseconds % 3600000) / 60000)
+    $seconds = [int][math]::Floor(($Milliseconds % 60000) / 1000)
+    $ms = [int]($Milliseconds % 1000)
+    return ("{0:D2}:{1:D2}:{2:D2},{3:D3}" -f $hours, $minutes, $seconds, $ms)
+}
+
+Write-Output "--- YTSubConverter Start ---"
+Write-Output "Video: $VideoPath"
+
+$VideoBaseName = [System.IO.Path]::GetFileNameWithoutExtension($VideoPath)
+$VideoDirectory = [System.IO.Path]::GetDirectoryName($VideoPath)
+
+$ConverterExePath = Find-YTSubConverter -VideoDirectory $VideoDirectory
+if ($ConverterExePath) {
+    Write-Output "YTSubConverter: $ConverterExePath"
+} else {
+    Write-Warning "YTSubConverter.exe not found"
+}
+
+$SubtitleExtensions = @('.srv3', '.srt', '.vtt', '.ass')
+$LanguageCodes = @('ja', 'en', 'ko', 'zh-Hans', 'zh-Hant', 'vi', 'es', 'fr', 'de', 'ru')
+$SubtitleFiles = @()
+
+foreach ($lang in $LanguageCodes) {
+    foreach ($ext in $SubtitleExtensions) {
+        $possiblePath = Join-Path $VideoDirectory "$VideoBaseName.$lang$ext"
+        if (Test-Path -LiteralPath $possiblePath) {
+            $SubtitleFiles += Get-Item -LiteralPath $possiblePath
+        }
+    }
+}
+
+foreach ($ext in $SubtitleExtensions) {
+    $possiblePath = Join-Path $VideoDirectory "$VideoBaseName$ext"
+    if (Test-Path -LiteralPath $possiblePath) {
+        $SubtitleFiles += Get-Item -LiteralPath $possiblePath
+    }
+}
+
+if ($SubtitleFiles.Count -eq 0) {
+    Write-Output "No subtitle files found"
+    exit 0
+}
+
+foreach ($FileObj in $SubtitleFiles) {
+    $DownloadedFile = $FileObj.FullName
+    $FileExtension = [System.IO.Path]::GetExtension($DownloadedFile).ToLower()
+    if ($TargetExtensions -notcontains $FileExtension) { continue }
     
-    # (C) 元の .srv3 ファイルを削除する
+    Write-Output "Processing: $DownloadedFile"
+    if (-not (Test-Path -LiteralPath $DownloadedFile)) { continue }
+    
+    $FileContent = ""
     try {
-        Write-Output "情報: 変換元のファイル ($DownloadedFile) を削除します。"
-        Remove-Item -Path $DownloadedFile -Force -ErrorAction Stop
-        Write-Output "情報: 元ファイルの削除完了。"
+        $FileContent = Get-Content -LiteralPath $DownloadedFile -Encoding utf8 -Raw -ErrorAction Stop
+    } catch {
+        Write-Error "Failed to read: $_"
+        continue
     }
-    catch {
-        Write-Warning "警告: 変換元のファイル ($DownloadedFile) の削除に失敗した: $_"
+    
+    $NeedsConversion = $false
+    if ($FileContent -match '<span') {
+        $NeedsConversion = $true
+        Write-Output "Detected span tag - using YTSubConverter"
+    } elseif ($FileContent -match '<u') {
+        $NeedsConversion = $true
+        Write-Output "Detected u tag - using YTSubConverter"
+    } elseif ($FileContent -match '<pen\s') {
+        $NeedsConversion = $true
+        Write-Output "Detected pen tag (styled subtitles) - using YTSubConverter"
     }
-
+    
+    if ($NeedsConversion -eq $false) {
+        Write-Output "Simple XML - converting to SRT"
+        $OutputSubtitleFile = [System.IO.Path]::ChangeExtension($DownloadedFile, $SrtOutputExtension)
+        try {
+            ConvertTo-SimpleSrt -InputFile $DownloadedFile -OutputFile $OutputSubtitleFile
+            Write-Output "Converted: $OutputSubtitleFile"
+            Remove-Item -LiteralPath $DownloadedFile -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "Conversion failed: $_"
+        }
+        continue
+    }
+    
+    if (-not $ConverterExePath) {
+        Write-Warning "YTSubConverter.exe not found - skipping"
+        continue
+    }
+    
+    $OutputSubtitleFile = [System.IO.Path]::ChangeExtension($DownloadedFile, $AssOutputExtension)
+    Write-Output "Converting to ASS: $OutputSubtitleFile"
+    try {
+        & "$ConverterExePath" "$DownloadedFile" "$OutputSubtitleFile" 2>&1 | Out-Null
+        
+        if (Test-Path -LiteralPath $OutputSubtitleFile) {
+            Write-Output "Converted: $OutputSubtitleFile"
+            Remove-Item -LiteralPath $DownloadedFile -Force -ErrorAction Stop
+        } else {
+            Write-Warning "Conversion may have failed - output file not found (Exit: $LASTEXITCODE)"
+        }
+    } catch {
+        Write-Error "Error: $_"
+    }
 }
-catch {
-    Write-Error "スクリプト実行中に致命的なエラーが発生した: $_"
-    exit 1
-}
 
-Write-Output "-----------------------------------"
+Write-Output "--- YTSubConverter Completed ---"
 exit 0
-#endregion

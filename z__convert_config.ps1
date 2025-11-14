@@ -1,87 +1,64 @@
-<#
+ï»¿<#
 .SYNOPSIS
-    'yt-dlp config' (Linux—p) ‚ğ 'win yt-dlp config' (Windows—p) ‚É•ÏŠ·‚·‚é‚Ì‚¶‚áB
+    'yt-dlp config' (Linuxç”¨) ã‚’ 'win yt-dlp config' (Windowsç”¨) ã«å¤‰æ›ã™ã‚‹ã®ã˜ã‚ƒã€‚
 .DESCRIPTION
-    (ƒ†[ƒU[w¦ [2025-09-24] ‚ÉŠî‚Ã‚­ƒwƒ‹ƒvÀ‘•)
-    ƒoƒbƒ`ƒtƒ@ƒCƒ‹ (z__convert_config.bat) ‚Ì‘ã‚í‚è‚Æ‚È‚éAŠ®‘S PowerShell ”ÅƒXƒNƒŠƒvƒg‚¶‚áB
-    ˆÈ‰º‚Ì•ÏŠ·ˆ—‚ğÀs‚·‚é‚¼B
-    1. /tmp ‚ğ %TEMP% ‚É’uŠ·‚·‚éB
-    2. Linux—p --exec (Koa_Discord_Message.sh) ‚ğƒRƒƒ“ƒgƒAƒEƒg‚·‚éB
-    3. Windows—p --exec (run_sub_converter.ps1 ŒÄ‚Ño‚µ) ‚ğ‘}“ü‚·‚éB
+    Linuxç”¨è¨­å®šãƒ•ã‚¡ã‚¤ãƒ«ã‚’Windowsç”¨ã«å¤‰æ›ã—ã¾ã™ã€‚
+    1. /tmp ã‚’ %TEMP% ã«ç½®æ›
+    2. Linuxç”¨ --exec ã‚’ã‚³ãƒ¡ãƒ³ãƒˆã‚¢ã‚¦ãƒˆ
+    3. Windowsç”¨ --exec (after_move) ã‚’æŒ¿å…¥
 .EXAMPLE
     .\z__convert_config.ps1
-    (‚±‚ÌƒXƒNƒŠƒvƒg‚ğÀs‚·‚é‚¾‚¯‚Å 'win yt-dlp config' ‚ª¶¬‚³‚ê‚é)
 .NOTES
-    •¶šƒR[ƒh: UTF-8 ‚Å•Û‘¶‚·‚é‚ñ‚¶‚á‚¼B
-    'yt-dlp config', 'run_sub_converter.ps1' ‚Æ“¯‚¶ƒtƒHƒ‹ƒ_‚É’u‚­‚±‚ÆB
+    æ–‡å­—ã‚³ãƒ¼ãƒ‰: UTF-8 BOM ã§ä¿å­˜
 #>
 param ()
 
-#region --- İ’è ---
-# (ƒ†[ƒU[w¦ [2025-09-24] #region À‘•)
-
-# ‚±‚ÌƒXƒNƒŠƒvƒg (.ps1) ‚ª‚ ‚éƒtƒHƒ‹ƒ_‚ÌƒpƒX
 $ScriptDirectory = $PSScriptRoot
-
-# “ü—Íƒtƒ@ƒCƒ‹ (Linux—p config)
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
-# o—Íƒtƒ@ƒCƒ‹ (Windows—p config)
 $OutputFile = Join-Path $ScriptDirectory "win yt-dlp config"
-
-# Windows—p --exec ‚ÅŒÄ‚Ño‚·ƒXƒNƒŠƒvƒgƒtƒ@ƒCƒ‹–¼
 $WindowsExecScript = "run_sub_converter.ps1"
-#endregion
 
-#region --- ƒƒCƒ“ˆ— ---
-Write-Output "PowerShell •ÏŠ·ƒƒWƒbƒN (z__convert_config.ps1) ‚ğÀs’†..."
-Write-Output "“ü—Í: $InputFile"
-Write-Output "o—Í: $OutputFile"
+Write-Output "PowerShell å¤‰æ›ãƒ­ã‚¸ãƒƒã‚¯ (z__convert_config.ps1) ã‚’å®Ÿè¡Œä¸­..."
+Write-Output "å…¥åŠ›: $InputFile"
+Write-Output "å‡ºåŠ›: $OutputFile"
 
 if (-not (Test-Path $InputFile)) {
-    Write-Error "ƒGƒ‰[: “ü—Íƒtƒ@ƒCƒ‹ '$InputFile' ‚ªŒ©‚Â‚©‚ç‚ñI"
-    Write-Error "‚±‚ÌƒXƒNƒŠƒvƒg‚Æ“¯‚¶ƒtƒHƒ‹ƒ_‚É 'yt-dlp config' ‚ğ’u‚­‚ñ‚¶‚á‚¼B"
+    Write-Error "ã‚¨ãƒ©ãƒ¼: å…¥åŠ›ãƒ•ã‚¡ã‚¤ãƒ« '$InputFile' ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“"
     exit 1
 }
 
-# •ÏŠ·Œ‹‰Ê‚ğŠi”[‚·‚é”z—ñ
 $OutputLines = [System.Collections.Generic.List[string]]::new()
 
-# •ÏŠ·ƒƒWƒbƒN–{‘Ì
 try {
     Get-Content -Path $InputFile -Encoding Utf8 | ForEach-Object {
         if ($_ -like '--exec *Koa_Discord_Message.sh*') {
-            # --- Linux—pexec‚ğWindows—p‚É·‚µ‘Ö‚¦ ---
-            $OutputLines.Add('# --- (Œ³) Linux—pDiscord’Ê’m (–³Œø‰») ---')
+            # Linuxç”¨execã‚’Windowsç”¨ã«å·®ã—æ›¿ãˆ
+            $OutputLines.Add('# --- (å…ƒ) Linuxç”¨Discordé€šçŸ¥ (ç„¡åŠ¹åŒ–) ---')
             $OutputLines.Add(('# ' + $_))
-            $OutputLines.Add('# === (V) Windows—p š–‹•ÏŠ· (after_download/Šg’£q”»•Ê) ===')
+            $OutputLines.Add('# === (æ–°) Windowsç”¨ å­—å¹•å¤‰æ› (after_moveä½¿ç”¨) ===')
             
             $ExecScriptPath = Join-Path $ScriptDirectory $WindowsExecScript
             
-            # --- ššš (‚±‚±‚ªC³‰ÓŠ) ššš ---
-            # '%%(filepath)q' ‚ğˆÍ‚ñ‚Å‚¢‚½—]Œv‚È '' ‚ğíœ‚µ‚½‚¼I
-            # yt-dlp ‚ª %%(filepath)q ‚ğ "C:\path\to\file.srv3" ‚Ì‚æ‚¤‚ÈƒNƒH[ƒg•t‚«ƒpƒX‚É
-            # ’u‚«Š·‚¦‚Ä‚©‚ç PowerShell ‚É“n‚µ‚Ä‚­‚ê‚éB
-            $ExecCommand = '--exec "after_download:powershell.exe -NoProfile -ExecutionPolicy Bypass -File ''{0}'' %%(filepath)q"' -f $ExecScriptPath
+            # after_moveã§å‹•ç”»ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ã‚’æ¸¡ã—ã¦å­—å¹•å¤‰æ›ã‚’å®Ÿè¡Œ
+            $ExecCommand = '--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{0}\" \"%(filepath)s\""' -f $ExecScriptPath
             
             $OutputLines.Add($ExecCommand)
         }
         else {
-            # --- /tmp ‚ğ %TEMP% ‚É’uŠ· ---
+            # /tmp ã‚’ %TEMP% ã«ç½®æ›
             $OutputLines.Add(($_ -replace '/tmp', '%TEMP%'))
         }
     }
 
-    # Œ‹‰Ê‚ğ UTF-8 ‚Åƒtƒ@ƒCƒ‹‚É‘‚«o‚·
     Set-Content -Path $OutputFile -Value $OutputLines -Encoding Utf8 -ErrorAction Stop
 
     Write-Output "--------------------"
-    Write-Output "•ÏŠ·Š®—¹‚¶‚áI"
-    Write-Output "'$OutputFile' ‚ª³í‚É¶¬‚³‚ê‚½‚Í‚¸‚¶‚á‚¼B"
+    Write-Output "å¤‰æ›å®Œäº†ï¼"
+    Write-Output "'$OutputFile' ãŒæ­£å¸¸ã«ç”Ÿæˆã•ã‚Œã¾ã—ãŸã€‚"
 
 }
 catch {
-    Write-Error "ƒGƒ‰[: •ÏŠ·‚Ü‚½‚Ío—Íƒtƒ@ƒCƒ‹ ($OutputFile) ‚Ö‚Ì‘‚«‚İ‚É¸”s‚µ‚½‚¼I"
+    Write-Error "ã‚¨ãƒ©ãƒ¼: å¤‰æ›ã¾ãŸã¯å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ« ($OutputFile) ã¸ã®æ›¸ãè¾¼ã¿ã«å¤±æ•—"
     Write-Error $_
     exit 1
 }
-#endregion
