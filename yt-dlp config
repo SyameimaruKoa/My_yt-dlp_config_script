@@ -90,7 +90,7 @@
 --exec 'Koa_Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "プレイリストNo.%(playlist_index)s/%(n_entries)s %(autonumber)s" "タイトル→%(title)s" "ファイル情報→（長さ%(duration_string)s）,（サイズ%(filesize)s or %(filesize_approx)s）,（解像度%(resolution)s）,（%(fps)sFPS）,（ビットレート%(tbr)sKbps）,（%(release_date)s公開）" "保存ファイル名→%(filename)s" "─────"'
 
 # --- Windows用 (字幕変換 / z__convert_config.ps1 で有効化される) ---
-#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\run_sub_converter.ps1\" \"%(filepath)s\""
+#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\z__run_sub_converter.ps1\" \"%(filepath)s\""
 
 # (拡張子指定) 最後にコンテナを変更します
 # (コメントアウト) もし有効にすれば、動画と音声を合体(merge)させる際の出力コンテナ形式を強制的に webm にするのじゃ
