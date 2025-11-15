@@ -28,7 +28,8 @@ function Find-YTSubConverter {
         if (Test-Path -LiteralPath $env:YTSC_PATH) {
             if ((Get-Item -LiteralPath $env:YTSC_PATH) -is [System.IO.DirectoryInfo]) {
                 $candidates += (Join-Path $env:YTSC_PATH 'YTSubConverter.exe')
-            } else {
+            }
+            else {
                 $candidates += $env:YTSC_PATH
             }
         }
@@ -86,29 +87,12 @@ $VideoDirectory = [System.IO.Path]::GetDirectoryName($VideoPath)
 $ConverterExePath = Find-YTSubConverter -VideoDirectory $VideoDirectory
 if ($ConverterExePath) {
     Write-Output "YTSubConverter: $ConverterExePath"
-} else {
+}
+else {
     Write-Warning "YTSubConverter.exe not found"
 }
 
-$SubtitleExtensions = @('.srv3', '.srt', '.vtt', '.ass')
-$LanguageCodes = @('ja', 'en', 'ko', 'zh-Hans', 'zh-Hant', 'vi', 'es', 'fr', 'de', 'ru')
-$SubtitleFiles = @()
-
-foreach ($lang in $LanguageCodes) {
-    foreach ($ext in $SubtitleExtensions) {
-        $possiblePath = Join-Path $VideoDirectory "$VideoBaseName.$lang$ext"
-        if (Test-Path -LiteralPath $possiblePath) {
-            $SubtitleFiles += Get-Item -LiteralPath $possiblePath
-        }
-    }
-}
-
-foreach ($ext in $SubtitleExtensions) {
-    $possiblePath = Join-Path $VideoDirectory "$VideoBaseName$ext"
-    if (Test-Path -LiteralPath $possiblePath) {
-        $SubtitleFiles += Get-Item -LiteralPath $possiblePath
-    }
-}
+$SubtitleFiles = Get-ChildItem -Path $VideoDirectory -Filter "*.srv3" -File -ErrorAction SilentlyContinue | Where-Object { $_.BaseName -like "*$VideoBaseName*" }
 
 if ($SubtitleFiles.Count -eq 0) {
     Write-Output "No subtitle files found"
@@ -126,7 +110,8 @@ foreach ($FileObj in $SubtitleFiles) {
     $FileContent = ""
     try {
         $FileContent = Get-Content -LiteralPath $DownloadedFile -Encoding utf8 -Raw -ErrorAction Stop
-    } catch {
+    }
+    catch {
         Write-Error "Failed to read: $_"
         continue
     }
@@ -135,10 +120,12 @@ foreach ($FileObj in $SubtitleFiles) {
     if ($FileContent -match '<span') {
         $NeedsConversion = $true
         Write-Output "Detected span tag - using YTSubConverter"
-    } elseif ($FileContent -match '<u') {
+    }
+    elseif ($FileContent -match '<u') {
         $NeedsConversion = $true
         Write-Output "Detected u tag - using YTSubConverter"
-    } elseif ($FileContent -match '<pen\s') {
+    }
+    elseif ($FileContent -match '<pen\s') {
         $NeedsConversion = $true
         Write-Output "Detected pen tag (styled subtitles) - using YTSubConverter"
     }
@@ -150,7 +137,8 @@ foreach ($FileObj in $SubtitleFiles) {
             ConvertTo-SimpleSrt -InputFile $DownloadedFile -OutputFile $OutputSubtitleFile
             Write-Output "Converted: $OutputSubtitleFile"
             Remove-Item -LiteralPath $DownloadedFile -Force -ErrorAction Stop
-        } catch {
+        }
+        catch {
             Write-Warning "Conversion failed: $_"
         }
         continue
@@ -169,10 +157,12 @@ foreach ($FileObj in $SubtitleFiles) {
         if (Test-Path -LiteralPath $OutputSubtitleFile) {
             Write-Output "Converted: $OutputSubtitleFile"
             Remove-Item -LiteralPath $DownloadedFile -Force -ErrorAction Stop
-        } else {
+        }
+        else {
             Write-Warning "Conversion may have failed - output file not found (Exit: $LASTEXITCODE)"
         }
-    } catch {
+    }
+    catch {
         Write-Error "Error: $_"
     }
 }
