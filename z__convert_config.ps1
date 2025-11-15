@@ -4,8 +4,9 @@
 .DESCRIPTION
     Linux用設定ファイルをWindows用に変換します。
     1. /tmp を %TEMP% に置換
-    2. Linux用 --exec をコメントアウト
-    3. Windows用 --exec (after_move) を挿入
+    2. Linux用 --exec (Koa_Discord_Message.sh) をコメントアウト
+    3. Windows用 --exec (プレースホルダー %SCRIPT_DIR% を含む行) を
+       コメント解除し、パスを $PSScriptRoot に置換
 .EXAMPLE
     .\z__convert_config.ps1
 .NOTES
@@ -16,11 +17,13 @@ param ()
 $ScriptDirectory = $PSScriptRoot
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
 $OutputFile = Join-Path $ScriptDirectory "win yt-dlp config"
-$WindowsExecScript = "run_sub_converter.ps1"
+$Placeholder = "%SCRIPT_DIR%"
+$LinuxExecMarker = "Koa_Discord_Message.sh"
 
 Write-Output "PowerShell 変換ロジック (z__convert_config.ps1) を実行中..."
 Write-Output "入力: $InputFile"
 Write-Output "出力: $OutputFile"
+Write-Output "スクリプト配置場所 (置換パス): $ScriptDirectory"
 
 if (-not (Test-Path $InputFile)) {
     Write-Error "エラー: 入力ファイル '$InputFile' が見つかりません"
@@ -31,18 +34,23 @@ $OutputLines = [System.Collections.Generic.List[string]]::new()
 
 try {
     Get-Content -Path $InputFile -Encoding Utf8 | ForEach-Object {
-        if ($_ -like '--exec *Koa_Discord_Message.sh*') {
-            # Linux用execをWindows用に差し替え
-            $OutputLines.Add('# --- (元) Linux用Discord通知 (無効化) ---')
+        
+        if ($_ -like "*$LinuxExecMarker*") {
+            # Linux用execをコメントアウト
+            Write-Output "Linux用 --exec を無効化..."
             $OutputLines.Add(('# ' + $_))
-            $OutputLines.Add('# === (新) Windows用 字幕変換 (after_move使用) ===')
+        }
+        elseif ($_ -like "*$Placeholder*") {
+            # Windows用プレースホルダー行を有効化・置換
+            Write-Output "Windows用 --exec を有効化・パス置換..."
             
-            $ExecScriptPath = Join-Path $ScriptDirectory $WindowsExecScript
+            # 1. コメント解除 (行頭の # を削除)
+            $UncommentedLine = $_.TrimStart('#')
             
-            # after_moveで動画ファイルパスを渡して字幕変換を実行
-            $ExecCommand = '--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{0}\" \"%(filepath)s\""' -f $ExecScriptPath
+            # 2. プレースホルダーを $ScriptDirectory (絶対パス) に置換
+            $FinalExecCommand = $UncommentedLine -replace [regex]::Escape($Placeholder), $ScriptDirectory
             
-            $OutputLines.Add($ExecCommand)
+            $OutputLines.Add($FinalExecCommand)
         }
         else {
             # /tmp を %TEMP% に置換
