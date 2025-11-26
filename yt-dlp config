@@ -128,3 +128,5 @@
 # これが現在有効な設定。ダウンロード中や結合中の一時ファイルを /tmp ディレクトリに置く
 -P temp:/tmp
 #-P temp:/mnt/Linux_Data/swap
+
+#-P temp:R:\Temp
