@@ -89,6 +89,10 @@
 # --- Linux用 (Discord通知) ---
 --exec 'Koa_Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "プレイリストNo.%(playlist_index)s/%(n_entries)s %(autonumber)s" "タイトル→%(title)s" "ファイル情報→（長さ%(duration_string)s）,（サイズ%(filesize)s or %(filesize_approx)s）,（解像度%(resolution)s）,（%(fps)sFPS）,（ビットレート%(tbr)sKbps）,（%(release_date)s公開）" "保存ファイル名→%(filename)s" "─────"'
 
+# --- Linux用 (字幕変換 / z__setup_yt-dlp.sh でリンク設定済み) ---
+# ~/.config/yt-dlp/z__run_sub_converter.sh にシンボリックリンクがある前提じゃ
+--exec '~/.config/yt-dlp/z__run_sub_converter.sh "%(filepath)s"'
+
 # --- Windows用 (字幕変換 / z__convert_config.ps1 で有効化される) ---
 #--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\z__run_sub_converter.ps1\" \"%(filepath)s\""
 

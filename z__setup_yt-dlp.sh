@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# yt-dlp と Gist の設定ファイルをインストールするスクリプト
+# yt-dlp (Nightly) と Gist の設定ファイル、および YTSubConverter をインストールするスクリプト
 # (aria2c, wget, curl のいずれかを利用可能なものでダウンロード)
 # (既存の設定ファイルを強制的にシンボリックリンクで上書き)
 #
@@ -17,9 +17,12 @@ show_help() {
 使用法: $(basename "$0")
        $(basename "$0") -h | --help
 
-このスクリプトは yt-dlp の最新版をインストールし、
-Gist (21141912fbacf40877f4cf877577e082) から設定ファイルをクローンして
-シンボリックリンクを作成します。
+このスクリプトは以下の処理を一括で行うのじゃ:
+  1. yt-dlp の最新 Nightly ビルドをインストール
+  2. YTSubConverter (Linux版) を .deb パッケージからインストール
+  3. Gist (21141912fbacf40877f4cf877577e082) から設定ファイルをクローン
+  4. 設定ファイル(config) と 字幕変換スクリプト(z__run_sub_converter.sh) の
+     シンボリックリンクを ~/.config/yt-dlp/ に作成
 
 ダウンロードには aria2c, wget, curl のいずれかを利用します。
 (優先度: aria2c > wget > curl)
@@ -53,17 +56,15 @@ if [ $# -gt 0 ]; then
 fi
 
 # --- メイン処理 ---
-echo "yt-dlp セットアップ処理を開始するのじゃ。"
+echo "yt-dlp (Nightly) & YTSubConverter セットアップ処理を開始するのじゃ。"
 
-# 必要なコマンドの存在チェック (sudo, git)
-if ! command -v git &> /dev/null; then
-    echo "エラー: 実行に必要な 'git' が見つからんぞ。" >&2
-    exit 1
-fi
-if ! command -v sudo &> /dev/null; then
-    echo "エラー: 実行に必要な 'sudo' が見つからんぞ。" >&2
-    exit 1
-fi
+# 必要なコマンドの存在チェック (sudo, git, python3)
+for cmd in git sudo python3; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "エラー: 実行に必要な '$cmd' が見つからんぞ。" >&2
+        exit 1
+    fi
+done
 
 # --- ダウンロードツールの確認 (優先度: aria2c > wget > curl) ---
 DL_TOOL=""
@@ -81,11 +82,12 @@ echo "ダウンロードには '$DL_TOOL' を使うぞ。"
 echo "---"
 
 
-# 1. yt-dlp のダウンロードとインストール
-URL="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+# 1. yt-dlp (Nightly) のダウンロードとインストール
+# Nightlyビルドのリポジトリから最新のバイナリを取得
+URL="https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp"
 TARGET_PATH="/usr/local/bin/yt-dlp"
 
-echo "yt-dlp をダウンロードしてインストールするぞ... (sudo がパスワードを尋ねるやもしれん)"
+echo "yt-dlp (Nightly) をダウンロードしてインストールするぞ... (sudo がパスワードを尋ねるやもしれん)"
 
 DOWNLOAD_SUCCESS=false
 case "$DL_TOOL" in
@@ -118,10 +120,35 @@ if ! sudo chmod a+rx "$TARGET_PATH"; then
     echo "エラー: yt-dlp への実行権限の付与に失敗したぞ。" >&2
     exit 1
 fi
-echo "yt-dlp のインストール完了じゃ。"
+echo "yt-dlp (Nightly) のインストール完了じゃ。"
 echo "---"
 
-# 2. Gist のクローン
+# 2. YTSubConverter のインストール
+echo "YTSubConverter (.deb) をインストール中..."
+YTSC_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter-Linux.deb"
+TEMP_DEB="/tmp/YTSubConverter-Linux.deb"
+
+# .debファイルのダウンロード
+case "$DL_TOOL" in
+    aria2c) aria2c -d "/tmp" -o "YTSubConverter-Linux.deb" --allow-overwrite=true "$YTSC_URL" ;;
+    wget)   wget "$YTSC_URL" -O "$TEMP_DEB" ;;
+    curl)   curl -L "$YTSC_URL" -o "$TEMP_DEB" ;;
+esac
+
+# インストール実行 (apt-get install ./file.deb で依存関係も解決させる)
+if [ -f "$TEMP_DEB" ]; then
+    echo "apt で .deb パッケージをインストールするぞ..."
+    sudo apt-get update
+    sudo apt-get install -y "$TEMP_DEB"
+    rm "$TEMP_DEB"
+    echo "YTSubConverter のインストール完了じゃ。"
+else
+    echo "エラー: YTSubConverter パッケージのダウンロードに失敗したようじゃな。" >&2
+    exit 1
+fi
+echo "---"
+
+# 3. Gist のクローン
 GIST_DIR="$HOME/21141912fbacf40877f4cf877577e082"
 GIST_URL="https://gist.github.com/21141912fbacf40877f4cf877577e082.git"
 
@@ -137,10 +164,16 @@ else
 fi
 echo "---"
 
-# 3. 設定ファイルのシンボリックリンク作成
+# 4. 設定ファイルとスクリプトのシンボリックリンク作成
 CONFIG_DIR="$HOME/.config/yt-dlp"
-CONFIG_FILE="$CONFIG_DIR/config"
-SOURCE_FILE="$GIST_DIR/yt-dlp config" # ファイル名にスペース
+
+# リンク先パス
+LINK_CONFIG="$CONFIG_DIR/config"
+LINK_SCRIPT="$CONFIG_DIR/z__run_sub_converter.sh"
+
+# Gist内の実体パス
+SOURCE_CONFIG="$GIST_DIR/yt-dlp config" # ファイル名にスペース
+SOURCE_SCRIPT="$GIST_DIR/z__run_sub_converter.sh"
 
 echo "設定ディレクトリ ($CONFIG_DIR) を確認・作成中..."
 if ! mkdir -p "$CONFIG_DIR"; then
@@ -148,26 +181,32 @@ if ! mkdir -p "$CONFIG_DIR"; then
     exit 1
 fi
 
-# ソースファイルの存在確認
-if [ ! -f "$SOURCE_FILE" ]; then
-    echo "エラー: Gist でクローンしたはずの設定ファイルが見当たらん: $SOURCE_FILE" >&2
-    echo "Gist の中身が変わったか、クローンに失敗したかじゃな。" >&2
+# --- config ファイルのリンク ---
+if [ -f "$SOURCE_CONFIG" ]; then
+    echo "設定ファイル ($LINK_CONFIG) のシンボリックリンクを【強制的に】作成するぞ。"
+    if ! ln -s -f "$SOURCE_CONFIG" "$LINK_CONFIG"; then
+        echo "エラー: config のリンク作成に失敗したぞ。" >&2
+        exit 1
+    fi
+    echo "config のリンク作成完了じゃ。"
+else
+    echo "エラー: Gist 内に設定ファイルが見当たらん: $SOURCE_CONFIG" >&2
     exit 1
 fi
 
-# --- リンク作成処理 (変更点) ---
-echo "シンボリックリンク ($CONFIG_FILE) を【強制的に】作成するぞ。"
-echo "もし既存のファイルやリンクがあっても上書きするからの。"
-
-# -f (force) で既存のファイルを削除してリンクを作成
-# -s (symbolic)
-# ファイル名にスペースがあるのでクォート必須じゃ
-if ! ln -s -f "$SOURCE_FILE" "$CONFIG_FILE"; then
-     echo "エラー: シンボリックリンクの作成に失敗したぞ。" >&2
-     exit 1
+# --- 変換スクリプトのリンク ---
+if [ -f "$SOURCE_SCRIPT" ]; then
+    echo "変換スクリプト ($LINK_SCRIPT) のシンボリックリンクを作成し、実行権限を付与するぞ。"
+    if ! ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"; then
+        echo "エラー: スクリプトのリンク作成に失敗したぞ。" >&2
+        exit 1
+    fi
+    # 実行権限は実体ファイルに付与する
+    chmod +x "$SOURCE_SCRIPT"
+    echo "スクリプトのリンク作成と権限付与完了じゃ。"
+else
+    echo "警告: Gist 内に変換スクリプトが見当たらんぞ ($SOURCE_SCRIPT)。" >&2
 fi
-echo "シンボリックリンクの作成/上書き完了じゃ。"
-
 
 echo "---"
 echo "すべての処理が完了したぞ。これで文句なかろうな？"
