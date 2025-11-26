@@ -14,11 +14,12 @@ show_help() {
        $(basename "$0") -h | --help
 
 機能:
-  1. システムパッケージ (git, ffmpeg, python3, wine) のインストール
+  1. システムパッケージ (git, ffmpeg, python3, wine, winetricks) のインストール
   2. yt-dlp の最新 Nightly ビルドをインストール
   3. YTSubConverter.exe をダウンロードして配置
-  4. Gist (21141912fbacf40877f4cf877577e082) から設定ファイルをクローン
-  5. 各種シンボリックリンクを作成
+  4. Wine Mono をインストール (winetricks使用)
+  5. Gist から設定ファイルと最新の変換スクリプトをクローン
+  6. 各種シンボリックリンクを作成
 
 オプション:
   -h, --help    このヘルプを表示するのじゃ
@@ -32,13 +33,13 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
-echo "Wine環境 (EXE単体構成) で構築し直すぞ。"
+echo "Wine環境 (Mono自動インストール・/tmp作業対応版) で構築し直すぞ。"
 
 # --- 1. 必須パッケージ (Wine含む) のインストール ---
 echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
 sudo apt-get update
-# unzipは不要になったので削除
-sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine
+# winetricks を追加
+sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine winetricks
 
 echo "システムパッケージの準備完了じゃ。"
 echo "---"
@@ -73,7 +74,6 @@ echo "---"
 # 配置場所: ~/.config/yt-dlp/tools/YTSubConverter
 INSTALL_DIR="$HOME/.config/yt-dlp/tools/YTSubConverter"
 EXE_PATH="$INSTALL_DIR/YTSubConverter.exe"
-# ユーザー指定のEXE直リンク
 EXE_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter.exe"
 
 echo "Windows版 YTSubConverter.exe を配置中..."
@@ -90,15 +90,24 @@ case "$DL_TOOL" in
     *)      curl -L "$EXE_URL" -o "$EXE_PATH" ;;
 esac
 
-if [ -f "$EXE_PATH" ]; then
-    echo "YTSubConverter.exe 配置完了じゃ。"
-else
+if [ ! -f "$EXE_PATH" ]; then
     echo "エラー: EXEのダウンロードに失敗したようじゃ。" >&2
     exit 1
 fi
+echo "EXE配置完了。"
 echo "---"
 
-# --- 4. Gist設定のクローン & リンク作成 ---
+# --- 4. Wine Mono のインストール ---
+echo "Wine Mono をチェック中..."
+# winetricks -q mono を実行 (既にインストール済みならスキップされるはずじゃ)
+if winetricks -q mono; then
+    echo "Wine Mono のセットアップ完了じゃ。"
+else
+    echo "警告: winetricks でのエラーが出たが、既に手動で入れているなら無視してよい。"
+fi
+echo "---"
+
+# --- 5. Gist設定のクローン & リンク作成 ---
 GIST_DIR="$HOME/21141912fbacf40877f4cf877577e082"
 GIST_URL="https://gist.github.com/21141912fbacf40877f4cf877577e082.git"
 CONFIG_DIR="$HOME/.config/yt-dlp"
@@ -122,4 +131,4 @@ ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
 
 echo "---"
-echo "Wine環境セットアップ完了じゃ。これで動かなかったら知らんぞ！"
+echo "Wine環境セットアップ完了じゃ。"

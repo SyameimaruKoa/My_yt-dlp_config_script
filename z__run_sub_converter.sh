@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# yt-dlp から呼び出される字幕変換スクリプト (Wine版)
+# yt-dlp から呼び出される字幕変換スクリプト (Wine版・/tmp作業対応)
 #
 # 使用法: z__run_sub_converter.sh "動画ファイルのパス"
 #
@@ -11,7 +11,7 @@ show_help() {
 使用法: $(basename "$0") [動画ファイルのパス]
        $(basename "$0") -h | --help
 
-.srv3 字幕ファイルを検出し、内容に応じて変換を行うのじゃ。
+.srv3 字幕ファイルを検出し、一時ディレクトリ(/tmp)で変換を行ってから書き戻すのじゃ。
   - 装飾タグあり -> Wine 経由で Windows版 YTSubConverter.exe を実行 (.ass)
   - 装飾タグなし -> シンプルな .srt に変換 (Python使用)
 
@@ -31,64 +31,90 @@ if [ -z "$VIDEO_PATH" ]; then
     exit 1
 fi
 
+# パス情報の取得
 VIDEO_DIR=$(dirname "$VIDEO_PATH")
 VIDEO_BASENAME=$(basename "$VIDEO_PATH")
 VIDEO_NAME_NOEXT="${VIDEO_BASENAME%.*}"
-# Windows版のパス
+
+# Windows版ツールのパス
 EXE_PATH="$HOME/.config/yt-dlp/tools/YTSubConverter/YTSubConverter.exe"
 
-echo "--- 字幕変換処理 (Wine版) ---"
-echo "動画: $VIDEO_PATH"
+# 一時作業ディレクトリの作成
+WORK_DIR=$(mktemp -d)
+echo "--- 字幕変換処理 (/tmp作業モード) ---"
+echo "対象動画: $VIDEO_BASENAME"
+echo "作業場所: $WORK_DIR"
+
+# 終了時に一時ディレクトリを削除するトラップを設定
+cleanup() {
+    rm -rf "$WORK_DIR"
+    # echo "作業場所を掃除したぞ。"
+}
+trap cleanup EXIT
 
 # Wine と EXE の確認
 USE_WINE=false
 if command -v wine &> /dev/null; then
     if [ -f "$EXE_PATH" ]; then
         USE_WINE=true
-        echo "ツール確認: OK (Wine + $EXE_PATH)"
     else
-        echo "警告: YTSubConverter.exe が見つからん ($EXE_PATH)。セットアップを実行したか？"
+        echo "警告: YTSubConverter.exe が見つからん ($EXE_PATH)。"
     fi
 else
-    echo "警告: 'wine' コマンドが見つからん。インストールせよ。"
+    echo "警告: 'wine' コマンドが見つからん。"
 fi
 
-# .srv3 ファイルを探す
-find "$VIDEO_DIR" -maxdepth 1 -name "*.srv3" | while read -r SUB_FILE; do
-    if [[ "$SUB_FILE" != *"$VIDEO_NAME_NOEXT"* ]]; then continue; fi
-
-    echo "処理中: $SUB_FILE"
+# NAS上のファイルを検索
+find "$VIDEO_DIR" -maxdepth 1 -name "*.srv3" | while read -r SUB_FILE_FULLPATH; do
+    SUB_FILENAME=$(basename "$SUB_FILE_FULLPATH")
     
-    # ファイル内容チェック
-    NEEDS_CONVERSION=false
-    if grep -q "<span" "$SUB_FILE"; then NEEDS_CONVERSION=true; fi
-    if grep -q "<u" "$SUB_FILE"; then NEEDS_CONVERSION=true; fi
-    if grep -q "<pen" "$SUB_FILE"; then NEEDS_CONVERSION=true; fi
+    # 動画ファイル名を含むものだけ対象にする
+    if [[ "$SUB_FILENAME" != *"$VIDEO_NAME_NOEXT"* ]]; then continue; fi
 
-    if [ "$NEEDS_CONVERSION" = true ]; then
-        echo "装飾タグ検出 -> Wineで変換 (.ass)"
-        OUTPUT_ASS="${SUB_FILE%.*}.ass"
+    echo "処理中: $SUB_FILENAME"
+
+    # 1. ファイルを一時ディレクトリにコピー
+    cp "$SUB_FILE_FULLPATH" "$WORK_DIR/"
+    
+    # 2. 一時ディレクトリに移動して作業
+    # (サブシェル () を使うことで、ディレクトリ移動の影響をこのブロックだけに留める)
+    (
+        cd "$WORK_DIR" || exit 1
         
-        if [ "$USE_WINE" = true ]; then
-            # Wine実行 (デバッグログ抑制)
-            WINEDEBUG=-all wine "$EXE_PATH" "$SUB_FILE" "$OUTPUT_ASS"
+        # ファイル内容チェック
+        NEEDS_CONVERSION=false
+        if grep -q "<span" "$SUB_FILENAME"; then NEEDS_CONVERSION=true; fi
+        if grep -q "<u" "$SUB_FILENAME"; then NEEDS_CONVERSION=true; fi
+        if grep -q "<pen" "$SUB_FILENAME"; then NEEDS_CONVERSION=true; fi
+
+        if [ "$NEEDS_CONVERSION" = true ]; then
+            echo "  [装飾あり] -> Wineで変換 (.ass)"
+            OUTPUT_ASS="${SUB_FILENAME%.*}.ass"
             
-            if [ -f "$OUTPUT_ASS" ]; then
-                echo "変換完了: $OUTPUT_ASS"
-                rm "$SUB_FILE"
+            if [ "$USE_WINE" = true ]; then
+                # Wine実行 (エラーログは捨てるが、失敗時はステータスコードで判断)
+                wine "$EXE_PATH" "$SUB_FILENAME" "$OUTPUT_ASS" 2>&1 >/dev/null
+                
+                if [ -f "$OUTPUT_ASS" ]; then
+                    # 3. 成功したら元の場所(NAS)に書き戻す
+                    mv "$OUTPUT_ASS" "$VIDEO_DIR/"
+                    echo "  -> 成功: $OUTPUT_ASS をNASに転送したぞ。"
+                    
+                    # 4. 元のファイルを削除
+                    rm "$SUB_FILE_FULLPATH"
+                else
+                    echo "  -> 警告: 変換失敗。出力ファイルが生成されなかった。"
+                fi
             else
-                echo "警告: Wineでの変換に失敗したようじゃ。"
+                echo "  -> エラー: Wine環境がないためスキップ。"
             fi
+
         else
-            echo "エラー: Wine環境が整っていないため変換できん。"
-        fi
+            echo "  [シンプル] -> .srt に変換 (Python)"
+            OUTPUT_SRT="${SUB_FILENAME%.*}.srt"
 
-    else
-        echo "シンプルXML -> .srt に変換 (Python使用)"
-        OUTPUT_SRT="${SUB_FILE%.*}.srt"
-
-        # Pythonスクリプト
-        python3 -c '
+            # Pythonスクリプト
+            python3 -c '
 import sys
 import xml.etree.ElementTree as ET
 
@@ -125,15 +151,17 @@ try:
 except Exception as e:
     print(f"Python Error: {e}")
     sys.exit(1)
-' "$SUB_FILE" "$OUTPUT_SRT"
+' "$SUB_FILENAME" "$OUTPUT_SRT"
 
-        if [ $? -eq 0 ] && [ -f "$OUTPUT_SRT" ]; then
-            echo "変換完了: $OUTPUT_SRT"
-            rm "$SUB_FILE"
-        else
-            echo "警告: .srt への変換に失敗したぞ。"
+            if [ $? -eq 0 ] && [ -f "$OUTPUT_SRT" ]; then
+                mv "$OUTPUT_SRT" "$VIDEO_DIR/"
+                echo "  -> 成功: $OUTPUT_SRT をNASに転送したぞ。"
+                rm "$SUB_FILE_FULLPATH"
+            else
+                echo "  -> 警告: .srt への変換に失敗したぞ。"
+            fi
         fi
-    fi
+    )
 done
 
 echo "--- 処理完了 ---"
