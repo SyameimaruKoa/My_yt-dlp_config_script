@@ -14,10 +14,10 @@ show_help() {
        $(basename "$0") -h | --help
 
 機能:
-  1. システムパッケージ (git, ffmpeg, python3, wine, winetricks) のインストール
+  1. システムパッケージ (git, ffmpeg, python3, wine) のインストール
   2. yt-dlp の最新 Nightly ビルドをインストール
   3. YTSubConverter.exe をダウンロードして配置
-  4. Wine Mono をインストール (winetricks使用)
+  4. Wine Mono 9.0.0 を手動ダウンロードしてインストール (これが確実じゃ！)
   5. Gist から設定ファイルと最新の変換スクリプトをクローン
   6. 各種シンボリックリンクを作成
 
@@ -33,13 +33,13 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
-echo "Wine環境 (Mono自動インストール・/tmp作業対応版) で構築し直すぞ。"
+echo "Wine環境 (Mono手動インストール版) で構築し直すぞ。"
 
 # --- 1. 必須パッケージ (Wine含む) のインストール ---
 echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
 sudo apt-get update
-# winetricks を追加
-sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine winetricks
+# winetricks は役立たずだったのでリストラじゃ
+sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine
 
 echo "システムパッケージの準備完了じゃ。"
 echo "---"
@@ -71,19 +71,14 @@ echo "yt-dlp 更新完了。"
 echo "---"
 
 # --- 3. Windows版 YTSubConverter.exe のインストール ---
-# 配置場所: ~/.config/yt-dlp/tools/YTSubConverter
 INSTALL_DIR="$HOME/.config/yt-dlp/tools/YTSubConverter"
 EXE_PATH="$INSTALL_DIR/YTSubConverter.exe"
 EXE_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter.exe"
 
 echo "Windows版 YTSubConverter.exe を配置中..."
-
 mkdir -p "$INSTALL_DIR"
 
-if [ -f "$EXE_PATH" ]; then
-    echo "既に存在するので、念のため上書きダウンロードするぞ。"
-fi
-
+# 念のため常に最新を取得
 case "$DL_TOOL" in
     aria2c) aria2c -d "$INSTALL_DIR" -o "YTSubConverter.exe" --allow-overwrite=true "$EXE_URL" ;;
     wget)   wget "$EXE_URL" -O "$EXE_PATH" ;;
@@ -97,13 +92,29 @@ fi
 echo "EXE配置完了。"
 echo "---"
 
-# --- 4. Wine Mono のインストール ---
-echo "Wine Mono をチェック中..."
-# winetricks -q mono を実行 (既にインストール済みならスキップされるはずじゃ)
-if winetricks -q mono; then
-    echo "Wine Mono のセットアップ完了じゃ。"
+# --- 4. Wine Mono の手動インストール ---
+echo "Wine Mono 9.0.0 をセットアップするぞ..."
+
+MONO_VERSION="9.0.0"
+MONO_MSI="wine-mono-${MONO_VERSION}-x86.msi"
+MONO_URL="https://dl.winehq.org/wine/wine-mono/${MONO_VERSION}/${MONO_MSI}"
+TEMP_MSI="/tmp/${MONO_MSI}"
+
+# ダウンロード
+if [ ! -f "$TEMP_MSI" ]; then
+    echo "インストーラーをダウンロード中..."
+    wget "$MONO_URL" -O "$TEMP_MSI"
+fi
+
+# インストール実行
+if [ -f "$TEMP_MSI" ]; then
+    echo "Wine Mono をインストール中 (画面は出ないぞ)..."
+    wine msiexec /i "$TEMP_MSI"
+    echo "インストールコマンド送信完了。少し待機する..."
+    sleep 5
 else
-    echo "警告: winetricks でのエラーが出たが、既に手動で入れているなら無視してよい。"
+    echo "エラー: Monoインストーラーのダウンロードに失敗した。" >&2
+    exit 1
 fi
 echo "---"
 
@@ -131,4 +142,4 @@ ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
 
 echo "---"
-echo "Wine環境セットアップ完了じゃ。"
+echo "全てのセットアップが完了したぞ。今度こそ完璧じゃ！"
