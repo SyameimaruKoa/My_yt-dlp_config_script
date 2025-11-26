@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# yt-dlp から呼び出される字幕変換スクリプト (Wine版・/tmp作業対応)
+# yt-dlp から呼び出される字幕変換スクリプト (Wine版・高信頼性コピー)
 #
 # 使用法: z__run_sub_converter.sh "動画ファイルのパス"
 #
@@ -11,9 +11,9 @@ show_help() {
 使用法: $(basename "$0") [動画ファイルのパス]
        $(basename "$0") -h | --help
 
-.srv3 字幕ファイルを検出し、一時ディレクトリ(/tmp)で変換を行ってから書き戻すのじゃ。
-  - 装飾タグあり -> Wine 経由で Windows版 YTSubConverter.exe を実行 (.ass)
-  - 装飾タグなし -> シンプルな .srt に変換 (Python使用)
+.srv3 字幕ファイルを検出し、一時ディレクトリ(/tmp)で変換を行ってからNASに書き戻すのじゃ。
+  - 安全のため mv ではなく cp を使用
+  - 詳細なログを表示
 
 オプション:
   -h, --help    このヘルプを表示
@@ -24,6 +24,9 @@ if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
     show_help
     exit 0
 fi
+
+# エラー発生時に即停止せず、個別にハンドリングする
+set +e
 
 VIDEO_PATH="$1"
 if [ -z "$VIDEO_PATH" ]; then
@@ -41,14 +44,14 @@ EXE_PATH="$HOME/.config/yt-dlp/tools/YTSubConverter/YTSubConverter.exe"
 
 # 一時作業ディレクトリの作成
 WORK_DIR=$(mktemp -d)
-echo "--- 字幕変換処理 (/tmp作業モード) ---"
+echo "--- 字幕変換処理 (高信頼性モード) ---"
 echo "対象動画: $VIDEO_BASENAME"
+echo "保存先(NAS): $VIDEO_DIR"
 echo "作業場所: $WORK_DIR"
 
-# 終了時に一時ディレクトリを削除するトラップを設定
+# 終了時に一時ディレクトリを削除するトラップ
 cleanup() {
     rm -rf "$WORK_DIR"
-    # echo "作業場所を掃除したぞ。"
 }
 trap cleanup EXIT
 
@@ -74,10 +77,12 @@ find "$VIDEO_DIR" -maxdepth 1 -name "*.srv3" | while read -r SUB_FILE_FULLPATH; 
     echo "処理中: $SUB_FILENAME"
 
     # 1. ファイルを一時ディレクトリにコピー
-    cp "$SUB_FILE_FULLPATH" "$WORK_DIR/"
+    if ! cp "$SUB_FILE_FULLPATH" "$WORK_DIR/"; then
+        echo "  -> エラー: 作業フォルダへのコピーに失敗した。"
+        continue
+    fi
     
     # 2. 一時ディレクトリに移動して作業
-    # (サブシェル () を使うことで、ディレクトリ移動の影響をこのブロックだけに留める)
     (
         cd "$WORK_DIR" || exit 1
         
@@ -92,18 +97,34 @@ find "$VIDEO_DIR" -maxdepth 1 -name "*.srv3" | while read -r SUB_FILE_FULLPATH; 
             OUTPUT_ASS="${SUB_FILENAME%.*}.ass"
             
             if [ "$USE_WINE" = true ]; then
-                # Wine実行 (エラーログは捨てるが、失敗時はステータスコードで判断)
-                wine "$EXE_PATH" "$SUB_FILENAME" "$OUTPUT_ASS" 2>&1 >/dev/null
-                
-                if [ -f "$OUTPUT_ASS" ]; then
-                    # 3. 成功したら元の場所(NAS)に書き戻す
-                    mv "$OUTPUT_ASS" "$VIDEO_DIR/"
-                    echo "  -> 成功: $OUTPUT_ASS をNASに転送したぞ。"
-                    
-                    # 4. 元のファイルを削除
-                    rm "$SUB_FILE_FULLPATH"
+                # Wine実行 (ログをファイルに吐かせて、エラー時のみ表示)
+                if wine "$EXE_PATH" "$SUB_FILENAME" "$OUTPUT_ASS" > wine_log.txt 2>&1; then
+                    # Wineの終了コードが0でもファイルが出来てない場合がある
+                    if [ -f "$OUTPUT_ASS" ] && [ -s "$OUTPUT_ASS" ]; then
+                        # 3. 成功したらNASに【コピー】する (mvよりcpが安全)
+                        echo "  -> 生成成功。NASへ転送中..."
+                        if cp -f "$OUTPUT_ASS" "$VIDEO_DIR/"; then
+                            echo "  -> 転送完了: $OUTPUT_ASS"
+                            
+                            # 4. 転送成功を確認してから元のファイルを削除
+                            if [ -f "$VIDEO_DIR/$OUTPUT_ASS" ]; then
+                                rm -f "$SUB_FILE_FULLPATH"
+                                echo "  -> 元ファイル(.srv3)を削除したぞ。"
+                            else
+                                echo "  -> 警告: 転送したはずのファイルがNASに見当たらん！元ファイルは残しておくぞ。"
+                            fi
+                        else
+                            echo "  -> エラー: NASへの書き込み(cp)に失敗した。"
+                        fi
+                    else
+                        echo "  -> 警告: 変換コマンドは走ったが、出力ファイルが無いか空じゃ。"
+                        echo "  --- Wine Log ---"
+                        cat wine_log.txt
+                        echo "  ----------------"
+                    fi
                 else
-                    echo "  -> 警告: 変換失敗。出力ファイルが生成されなかった。"
+                    echo "  -> エラー: Wineの実行に失敗した。"
+                    cat wine_log.txt
                 fi
             else
                 echo "  -> エラー: Wine環境がないためスキップ。"
@@ -113,7 +134,6 @@ find "$VIDEO_DIR" -maxdepth 1 -name "*.srv3" | while read -r SUB_FILE_FULLPATH; 
             echo "  [シンプル] -> .srt に変換 (Python)"
             OUTPUT_SRT="${SUB_FILENAME%.*}.srt"
 
-            # Pythonスクリプト
             python3 -c '
 import sys
 import xml.etree.ElementTree as ET
@@ -154,9 +174,12 @@ except Exception as e:
 ' "$SUB_FILENAME" "$OUTPUT_SRT"
 
             if [ $? -eq 0 ] && [ -f "$OUTPUT_SRT" ]; then
-                mv "$OUTPUT_SRT" "$VIDEO_DIR/"
-                echo "  -> 成功: $OUTPUT_SRT をNASに転送したぞ。"
-                rm "$SUB_FILE_FULLPATH"
+                 if cp -f "$OUTPUT_SRT" "$VIDEO_DIR/"; then
+                    echo "  -> 転送完了: $OUTPUT_SRT"
+                    rm -f "$SUB_FILE_FULLPATH"
+                else
+                    echo "  -> エラー: NASへの書き込み(cp)に失敗した。"
+                fi
             else
                 echo "  -> 警告: .srt への変換に失敗したぞ。"
             fi
