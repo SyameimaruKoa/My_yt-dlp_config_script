@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# yt-dlp (Nightly) と Windows版YTSubConverter (Wine動作) をセットアップするのじゃ
+# yt-dlp (Nightly) と Windows版YTSubConverter.exe (Wine動作) をセットアップするのじゃ
 #
 # 使用法: ./z__setup_yt-dlp.sh
 # ヘルプ: ./z__setup_yt-dlp.sh -h
@@ -14,9 +14,9 @@ show_help() {
        $(basename "$0") -h | --help
 
 機能:
-  1. システムパッケージ (git, ffmpeg, python3, wine, unzip) のインストール
+  1. システムパッケージ (git, ffmpeg, python3, wine) のインストール
   2. yt-dlp の最新 Nightly ビルドをインストール
-  3. YTSubConverter (Windows版) をダウンロードして配置
+  3. YTSubConverter.exe をダウンロードして配置
   4. Gist (21141912fbacf40877f4cf877577e082) から設定ファイルをクローン
   5. 各種シンボリックリンクを作成
 
@@ -32,13 +32,13 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
-echo "Wine環境で構築し直すぞ。覚悟はいいか？"
+echo "Wine環境 (EXE単体構成) で構築し直すぞ。"
 
 # --- 1. 必須パッケージ (Wine含む) のインストール ---
 echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
 sudo apt-get update
-# wine と unzip を追加
-sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine unzip
+# unzipは不要になったので削除
+sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine
 
 echo "システムパッケージの準備完了じゃ。"
 echo "---"
@@ -69,35 +69,32 @@ sudo chmod a+rx "$TARGET_PATH"
 echo "yt-dlp 更新完了。"
 echo "---"
 
-# --- 3. Windows版 YTSubConverter のインストール ---
+# --- 3. Windows版 YTSubConverter.exe のインストール ---
 # 配置場所: ~/.config/yt-dlp/tools/YTSubConverter
 INSTALL_DIR="$HOME/.config/yt-dlp/tools/YTSubConverter"
 EXE_PATH="$INSTALL_DIR/YTSubConverter.exe"
-ZIP_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter-1.6.4.zip"
-TEMP_ZIP="/tmp/YTSubConverter.zip"
+# ユーザー指定のEXE直リンク
+EXE_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter.exe"
 
-echo "Windows版 YTSubConverter をセットアップ中..."
+echo "Windows版 YTSubConverter.exe を配置中..."
+
+mkdir -p "$INSTALL_DIR"
 
 if [ -f "$EXE_PATH" ]; then
-    echo "既にインストール済みじゃな ($EXE_PATH)。スキップするぞ。"
-else
-    mkdir -p "$INSTALL_DIR"
-    
-    case "$DL_TOOL" in
-        aria2c) aria2c -d "/tmp" -o "YTSubConverter.zip" --allow-overwrite=true "$ZIP_URL" ;;
-        wget)   wget "$ZIP_URL" -O "$TEMP_ZIP" ;;
-        *)      curl -L "$ZIP_URL" -o "$TEMP_ZIP" ;;
-    esac
+    echo "既に存在するので、念のため上書きダウンロードするぞ。"
+fi
 
-    if [ -f "$TEMP_ZIP" ]; then
-        echo "解凍中..."
-        unzip -o "$TEMP_ZIP" -d "$INSTALL_DIR"
-        rm "$TEMP_ZIP"
-        echo "配置完了じゃ。"
-    else
-        echo "エラー: Zipファイルのダウンロードに失敗したようじゃ。" >&2
-        exit 1
-    fi
+case "$DL_TOOL" in
+    aria2c) aria2c -d "$INSTALL_DIR" -o "YTSubConverter.exe" --allow-overwrite=true "$EXE_URL" ;;
+    wget)   wget "$EXE_URL" -O "$EXE_PATH" ;;
+    *)      curl -L "$EXE_URL" -o "$EXE_PATH" ;;
+esac
+
+if [ -f "$EXE_PATH" ]; then
+    echo "YTSubConverter.exe 配置完了じゃ。"
+else
+    echo "エラー: EXEのダウンロードに失敗したようじゃ。" >&2
+    exit 1
 fi
 echo "---"
 
@@ -125,4 +122,4 @@ ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
 
 echo "---"
-echo "Wine環境セットアップ完了じゃ。これで文句なかろう！"
+echo "Wine環境セットアップ完了じゃ。これで動かなかったら知らんぞ！"
