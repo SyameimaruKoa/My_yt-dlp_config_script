@@ -18,7 +18,7 @@ $ScriptDirectory = $PSScriptRoot
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
 $OutputFile = Join-Path $ScriptDirectory "win yt-dlp config"
 $Placeholder = "%SCRIPT_DIR%"
-$LinuxExecMarker = "Koa_Discord_Message.sh"
+$LinuxExecMarker = ".sh "
 
 Write-Output "PowerShell 変換ロジック (z__convert_config.ps1) を実行中..."
 Write-Output "入力: $InputFile"
