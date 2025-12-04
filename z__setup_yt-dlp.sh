@@ -11,18 +11,19 @@ set -e
 show_help() {
     cat << EOF
 使用法: $(basename "$0")
-       $(basename "$0") -h | --help
+        $(basename "$0") -h | --help
 
 機能:
-  1. システムパッケージ (git, ffmpeg, python3, wine) のインストール
-  2. yt-dlp の最新 Nightly ビルドをインストール
-  3. YTSubConverter.exe をダウンロードして配置
-  4. Wine Mono 9.0.0 を手動ダウンロードしてインストール (これが確実じゃ！)
-  5. Gist から設定ファイルと最新の変換スクリプトをクローン
-  6. 各種シンボリックリンクを作成
+    1. システムパッケージ (git, ffmpeg, python3, wine, curl) のインストール
+    2. yt-dlp の最新 Nightly ビルドをインストール
+    3. YTSubConverter.exe をダウンロードして配置
+    4. Wine Mono 9.0.0 を手動ダウンロードしてインストール (これが確実じゃ！)
+    5. Gist から設定ファイルと最新の変換スクリプトをクローン
+    6. Deno (JavaScriptランタイム) をインストール
+    7. 各種シンボリックリンクを作成
 
 オプション:
-  -h, --help    このヘルプを表示するのじゃ
+    -h, --help    このヘルプを表示するのじゃ
 EOF
 }
 
@@ -33,12 +34,11 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
-echo "Wine環境 (Mono手動インストール版) で構築し直すぞ。"
+echo "yt-dlpがYouTubeで完璧に動くようにセットアップします"
 
 # --- 1. 必須パッケージ (Wine含む) のインストール ---
 echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
 sudo apt-get update
-# winetricks は役立たずだったのでリストラじゃ
 sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine
 
 echo "システムパッケージの準備完了じゃ。"
@@ -142,4 +142,11 @@ ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
 
 echo "---"
+
+# --- 6. Deno のインストール ---
+echo "Deno (JavaScriptランタイム) をインストールするのじゃ..."
+curl -fsSL https://deno.land/install.sh | sh
+echo "Deno のインストール処理完了じゃ。"
+echo "---"
+
 echo "全てのセットアップが完了したぞ。今度こそ完璧じゃ！"
