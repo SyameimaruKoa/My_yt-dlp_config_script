@@ -113,6 +113,7 @@
 
 # === ファイル名テンプレート ===
 # -o は --output の略。出力するファイル名とパスの形式を指定するのじゃ
+#-o "%(channel)s %(playlist)s/%(playlist_index)s - %(title)s [%(id)s].%(ext)s"
 #-o "%(playlist)s/%(playlist_index)s - %(title)s [%(id)s].%(ext)s"
 #-o "%(channel)s/%(title)s [%(id)s].%(ext)s"
 -o "%(playlist)s/%(title)s [%(id)s].%(ext)s"
