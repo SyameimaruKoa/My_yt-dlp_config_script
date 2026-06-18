@@ -92,7 +92,11 @@ else {
     Write-Warning "YTSubConverter.exe not found"
 }
 
-$SubtitleFiles = Get-ChildItem -Path $VideoDirectory -Filter "*.srv3" -File -ErrorAction SilentlyContinue | Where-Object { $_.BaseName -like "*$VideoBaseName*" }
+# Use -LiteralPath to avoid issues with brackets in directory names
+# Use IndexOf to avoid PowerShell wildcard interpretation in -like
+$SubtitleFiles = Get-ChildItem -LiteralPath $VideoDirectory -Filter "*.srv3" -File -ErrorAction SilentlyContinue | Where-Object { 
+    $_.BaseName.IndexOf($VideoBaseName, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 
+}
 
 if ($SubtitleFiles.Count -eq 0) {
     Write-Output "No subtitle files found"
