@@ -110,14 +110,14 @@
 # "..." の部分 (%(id)s, %(title)s など) は、ダウンロードした動画の情報に置き換えられ、スクリプトの引数として渡される (Discord通知用じゃな)
 
 # --- Linux用 (Discord通知) ---
---exec 'Koa_Discord_Message.sh "yt-dlp実行完了-[%(id)s]" "チャンネル名→%(channel)s" "プレイリスト名→%(playlist)s" "プレイリストNo.%(playlist_index)s/%(n_entries)s %(autonumber)s" "タイトル→%(title)s" "ファイル情報→（長さ%(duration_string)s）,（サイズ%(filesize)s or %(filesize_approx)s）,（解像度%(resolution)s）,（%(fps)sFPS）,（ビットレート%(tbr)sKbps）,（%(release_date)s公開）" "保存ファイル名→%(filename)s" "─────"'
+--exec 'Koa_Discord_Message.sh yt-dlp実行完了-[%(id)q] チャンネル名→%(channel)q プレイリスト名→%(playlist)q プレイリストNo.%(playlist_index)q/%(n_entries)q\ %(autonumber)q タイトル→%(title)q ファイル情報→（長さ%(duration_string)q）,（サイズ%(filesize)q\ or\ %(filesize_approx)q）,（解像度%(resolution)q）,（%(fps)qFPS）,（ビットレート%(tbr)qKbps）,（%(release_date)q公開） 保存ファイル名→%(filename)q ─────'
 
 # --- Linux用 (字幕変換 / z__setup_yt-dlp.sh でリンク設定済み) ---
 # ~/.config/yt-dlp/z__run_sub_converter.sh にシンボリックリンクがある前提じゃ
---exec '~/.config/yt-dlp/z__run_sub_converter.sh "%(filepath)s"'
+--exec '~/.config/yt-dlp/z__run_sub_converter.sh %(filepath)q'
 
 # --- Windows用 (字幕変換 / z__convert_config.ps1 で有効化される) ---
-#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\z__run_sub_converter.ps1\" \"%(filepath)s\""
+#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\z__run_sub_converter.ps1\" %(filepath)q"
 
 # === 結合コンテナ(拡張子)指定 ===
 # ★重要★ VR動画をそのままのデータで欲しい時(C案を使う時)は、以下のコメントアウトを外すのじゃ！
