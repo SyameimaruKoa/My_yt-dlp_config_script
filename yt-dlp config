@@ -72,7 +72,7 @@
 # -----------------------------------------------------
 
 # ▼ 8K・AV1拒否 ＋ A案（オリジナル音源のみ / 最も安全・確実）
--f "bv[height<=?2160][vcodec!*=av01]+ba[format_note*=original]/bv[height<=?2160][vcodec!*=av01]+ba/b[height<=?2160][vcodec!*=av01]"
+-f "bv[height<=?2160][vcodec!*=av01]+ba[format_note*=original]/bv[height<=?2160][vcodec!*=av01]+ba/b"
 
 # ▼ 8K・AV1拒否 ＋ B案（全言語音声mkv用）
 #-f "bv[height<=?2160][vcodec!*=av01] + all[acodec!=none][vcodec=none]"
