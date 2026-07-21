@@ -12,7 +12,14 @@
 .NOTES
     文字コード: UTF-8 BOM で保存
 #>
-param ()
+param (
+    [switch]$Help
+)
+
+if ($Help) {
+    Get-Help -Detailed $MyInvocation.MyCommand.Path
+    exit 0
+}
 
 $ScriptDirectory = $PSScriptRoot
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
