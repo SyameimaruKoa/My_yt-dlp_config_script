@@ -2,9 +2,6 @@
 # Windowsのファイル名で使えない文字 ( :*?"<>| など) を自動的に削除・置換するのじゃ
 --windows-filenames
 
-# ファイル名が長くなりすぎないよう、パスを含ないファイル名部分を250バイトに切り詰めるのじゃ
---trim-filenames 250
-
 # === ログイン（クッキー）設定 ===
 # ログイン（これのせいでサーバーだととっても面倒くさい）
 # ★重要★ VR動画用(C案)を使う時は「android_vr」クライアントがクッキー非対応なため、
@@ -131,19 +128,24 @@
 # ↑の aria2c に渡す引数を指定。-x8 (最大接続数8), -s8 (並列ダウンロード数8), --retry-wait=1 (リトライ待機1秒) などで高速化を図るのじゃ
 --downloader-args aria2c:"-x8 -s8 --retry-wait=1"
 
+
 # === ファイル名テンプレート ===
 # -o は --output の略。出力するファイル名とパスの形式を指定するのじゃ
-#-o "%(channel)s %(playlist)s/%(playlist_index)s - %(title)s [%(id)s].%(ext)s"
-#-o "%(playlist)s/%(playlist_index)s - %(title)s [%(id)s].%(ext)s"
-#-o "%(channel)s/%(title)s [%(id)s].%(ext)s"
--o "%(playlist)s/%(title)s [%(id)s].%(ext)s"
-#-o "%(title)s.%(ext)s"
+# Android・Linux・Windows共通で、各項目をUTF-8のバイト数単位で制限するのじゃ
+# チャンネル名・プレイリスト名は150バイト、タイトルは200バイトまで
+# 動画IDと拡張子は省略せずに保持するのじゃ
+#-o "%(channel).150B %(playlist).150B/%(playlist_index)s - %(title).200B [%(id)s].%(ext)s"
+#-o "%(playlist).150B/%(playlist_index)s - %(title).200B [%(id)s].%(ext)s"
+#-o "%(channel).150B/%(title).200B [%(id)s].%(ext)s"
+-o "%(playlist).150B/%(title).200B [%(id)s].%(ext)s"
+#-o "%(title).200B.%(ext)s"
 
 # (ファイル名関連でエラー吐いたとき用)
 # (コメントアウト) エラー回避用の安全な設定例1: チャンネル名/ID.ext
-#-o "%(channel)s/%(id)s.%(ext)s"
+#-o "%(channel).150B/%(id)s.%(ext)s"
 # (コメントアウト) エラー回避用の安全な設定例2: ID.ext
 #-o "%(id)s.%(ext)s"
+
 
 # === 一時ファイル ===
 # (ダウンロードファイルキャッシュ場)
