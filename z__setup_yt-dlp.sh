@@ -61,6 +61,7 @@ fi
 
 LOCAL_BIN="$HOME/.local/bin"
 VENV_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/venv"
+UPDATER_PATH="$(dirname "$VENV_DIR")/auto_update.py"
 mkdir -p "$LOCAL_BIN"
 export PATH="$LOCAL_BIN:$PATH"
 
@@ -330,7 +331,20 @@ TARGET_PATH="$LOCAL_BIN/yt-dlp"
 WRAPPER_TMP=$(mktemp)
 {
     printf '#!/bin/bash\n# yt-dlp venv wrapper\n'
-    printf 'exec %q -m yt_dlp "$@"\n' "$VENV_DIR/bin/python"
+    printf 'VENV_PYTHON=%q\n' "$VENV_DIR/bin/python"
+    printf 'UPDATER=%q\n' "$UPDATER_PATH"
+    cat <<'EOF_YTDLP_WRAPPER'
+show_help() {
+    exec "$VENV_PYTHON" -m yt_dlp --help
+}
+if [ -f "$UPDATER" ] && [ "${YT_DLP_SKIP_UPDATE:-}" != "1" ]; then
+    "$VENV_PYTHON" "$UPDATER" || true
+fi
+case "${1:-}" in
+    -h|--help) show_help ;;
+esac
+exec "$VENV_PYTHON" -m yt_dlp "$@"
+EOF_YTDLP_WRAPPER
 } > "$WRAPPER_TMP"
 install -m 755 "$WRAPPER_TMP" "$TARGET_PATH"
 if [ "$OS_TYPE" = "apt" ]; then
@@ -339,7 +353,7 @@ if [ "$OS_TYPE" = "apt" ]; then
 fi
 rm -f "$WRAPPER_TMP"
 echo "yt-dlpコマンド: $TARGET_PATH"
-"$TARGET_PATH" --version
+"$VENV_DIR/bin/python" -m yt_dlp --version
 echo "---"
 
 # --- 3. Windows版 YTSubConverter.exe のインストール ---
@@ -379,11 +393,18 @@ LINK_CONFIG="$CONFIG_DIR/config"
 LINK_SCRIPT="$CONFIG_DIR/z__run_sub_converter.sh"
 SOURCE_CONFIG="$SOURCE_DIR/yt-dlp config"
 SOURCE_SCRIPT="$SOURCE_DIR/z__run_sub_converter.sh"
+UPDATER_SOURCE="$SOURCE_DIR/tools/yt_dlp_auto_update.py"
+if [ ! -f "$UPDATER_SOURCE" ]; then
+    echo "エラー: 更新確認スクリプトが見つからん: $UPDATER_SOURCE" >&2
+    exit 1
+fi
+install -m 644 "$UPDATER_SOURCE" "$UPDATER_PATH"
 mkdir -p "$CONFIG_DIR"
 ln -s -f "$SOURCE_CONFIG" "$LINK_CONFIG"
 ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
 echo "設定ファイル: $LINK_CONFIG"
+echo "yt-dlp起動時の自動更新: $UPDATER_PATH"
 echo "---"
 
 # --- 6. Deno のインストール ---
