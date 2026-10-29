@@ -87,10 +87,11 @@ jobs:
                   [System.IO.File]::WriteAllText($shimConfig, "$targetExe`n--ignore-config", [System.Text.Encoding]::UTF8)
                   $env:YT_DLP_SHIM_TEST_OUTPUT = $output
                   $env:YT_DLP_SKIP_UPDATE = '1'
-                  & $shimExe '--format=bv*+ba' '日本語を含む 名前.mp4' '--output' 'C:\Video Files\%(title)s.%(ext)s'
+                  $jpArgument = (-join @([char]0x65e5, [char]0x672c, [char]0x8a9e)) + ' name.mp4'
+                  & $shimExe '--format=bv*+ba' $jpArgument '--output' 'C:\Video Files\%(title)s.%(ext)s'
                   if ($LASTEXITCODE -ne 17) { throw 'MPC-BE shim did not pass through child exit code.' }
                   $actual = [System.IO.File]::ReadAllLines($output, [System.Text.Encoding]::UTF8)
-                  $expected = @('--ignore-config', '--format=bv*+ba', '日本語を含む 名前.mp4', '--output', 'C:\Video Files\%(title)s.%(ext)s')
+                  $expected = @('--ignore-config', '--format=bv*+ba', $jpArgument, '--output', 'C:\Video Files\%(title)s.%(ext)s')
                   if ([string]::Join('|', $actual) -cne [string]::Join('|', $expected)) {
                       throw ("MPC-BE shim argument mismatch: " + [string]::Join('|', $actual))
                   }
