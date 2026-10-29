@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Windowsにyt-dlp Nightly、Python仮想環境、依存ツール、設定を導入するのじゃ。
 .DESCRIPTION
@@ -142,7 +142,7 @@ if (-not (Test-Path -LiteralPath $ConverterScript)) {
     throw 'z__convert_config.ps1 が見つからんぞ。'
 }
 & $ConverterScript
-if ($LASTEXITCODE -ne 0) {
+if (-not $?) {
     throw 'Windows向け設定ファイルの生成に失敗したぞ。'
 }
 $GeneratedConfig = Join-Path $PSScriptRoot 'win yt-dlp config'
