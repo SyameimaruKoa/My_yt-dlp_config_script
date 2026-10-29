@@ -22,7 +22,7 @@ cd My_yt-dlp_config_script
 bash z__setup_yt-dlp.sh
 ```
 
-更新時はリポジトリで `git pull --ff-only` を実行し、同じセットアップスクリプトを再実行するのじゃ。
+yt-dlpとpip依存パッケージは、通常の`yt-dlp`コマンドを実行するたびに更新確認するのじゃ。セットアップスクリプト・設定を更新したい場合は、リポジトリで`git pull --ff-only`を実行してセットアップを再実行するぞ。
 
 セットアップではffmpeg・aria2・Gitなどを準備し、yt-dlp NightlyとPython追加パッケージを仮想環境にインストールする。DenoとYTSubConverter.exeも配置するぞ。字幕変換はUMU / Proton経由で動作し、Bazziteでは既存のProtonを優先するのじゃ。`PROTON_PATH`で選択を上書きできる。
 
@@ -48,7 +48,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\z__setup_yt-dlp.ps1
 - `yt-dlp config`から変換したWindows用設定（`%APPDATA%\yt-dlp\config`）
 - `yt-dlp.cmd`とユーザーPATH
 
-更新時も同じスクリプトを再実行すればよいぞ。PATHの変更は新しく開いたターミナルから有効になるのじゃ。
+yt-dlpとpip依存パッケージの更新確認は、`yt-dlp`起動時に毎回自動実行される。セットアップ内容を更新する場合は、スクリプトを再実行するのじゃ。PATHの変更は新しいターミナルから有効になるぞ。
 
 ## Python仮想環境
 
@@ -64,7 +64,55 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\z__setup_yt-dlp.ps1
 - 共通：`yt-dlp[default,curl-cffi]`（依存する`yt-dlp-ejs`、`requests`、`certifi`、`websockets`、`mutagen`、`pycryptodomex`、`brotli`なども自動導入）
 - Linux：さらに`secretstorage`（LinuxでChromium系ブラウザーのCookieを取得する際に利用）
 
-Nightlyの取得にはpipの`--pre`を使う。pipパッケージとして導入しているため、`yt-dlp -U`ではなくセットアップスクリプトで更新するのじゃ。
+Nightlyの取得にはpipの`--pre`を使う。pip版は`yt-dlp -U`では更新せず、起動時に仮想環境のpipで確認・更新するのじゃ。
+
+## 起動時の自動更新
+
+LinuxもWindowsも`yt-dlp`起動時に`tools/yt_dlp_auto_update.py`のコピーを呼び出す。仮想環境内で`pip install --upgrade --pre`を実行し、yt-dlp Nightlyと追加依存パッケージの更新を確認するのじゃ。
+
+- 更新があればインストール後にダウンロード処理を開始する。
+- 通信エラーや更新失敗時は、インストール済みの版でそのまま起動する。
+- 同時に複数起動した場合は、更新処理が重複しないようにする。
+- 起動のたびにPyPIへ確認するため、ネットワーク状況によって開始までに時間がかかる。
+- 自動更新を一時的に省略するには環境変数`YT_DLP_SKIP_UPDATE=1`を指定する。
+
+**Linux**
+
+```bash
+YT_DLP_SKIP_UPDATE=1 yt-dlp "https://www.youtube.com/watch?v=..."
+```
+
+**Windows（PowerShell）**
+
+```powershell
+$env:YT_DLP_SKIP_UPDATE = '1'
+yt-dlp "https://www.youtube.com/watch?v=..."
+Remove-Item Env:YT_DLP_SKIP_UPDATE
+```
+
+更新結果の詳細なpipログは`YT_DLP_UPDATE_DEBUG=1`を指定し、更新に失敗したときに表示できるぞ。
+
+## 旧単独実行ファイルの削除（一度限り）
+
+移行用スクリプトは通常の利用から分けて`tools/migration/`に配置したのじゃ。**新しい仮想環境版のラッパーは削除しない**。
+
+**Linux**
+
+```bash
+bash tools/migration/remove-standalone.sh --dry-run
+bash tools/migration/remove-standalone.sh
+```
+
+以前のインストーラーが使用した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`を確認し、単独配布されたZIP形式のyt-dlpだけ削除する。別の場所に置いた場合は`--path /path/to/yt-dlp`を指定するのじゃ。セットアップによって既にラッパーへ置換されていれば削除対象にはならん。
+
+**Windows（PowerShell）**
+
+```powershell
+.\tools\migration\remove-standalone.ps1 --dry-run
+.\tools\migration\remove-standalone.ps1
+```
+
+ユーザー領域の既知の配置先にある`yt-dlp.exe`を確認する。別の場所にある場合は`--path 'C:\Tools\yt-dlp.exe'`を指定するのじゃ。pip仮想環境の`Scripts\yt-dlp.exe`と`yt-dlp.cmd`は削除しない。
 
 ## 使用方法
 
@@ -90,10 +138,12 @@ Windowsでも同じ`yt-dlp`コマンドで使用できるのじゃ。コマン�
 ```bash
 bash z__setup_yt-dlp.sh --help
 bash z__run_sub_converter.sh --help
+bash tools/migration/remove-standalone.sh --help
 ```
 
 ```powershell
 .\z__setup_yt-dlp.ps1 --help
 .\z__convert_config.ps1 --help
 .\z__run_sub_converter.ps1 -Help
+.\tools\migration\remove-standalone.ps1 --help
 ```
