@@ -94,7 +94,7 @@ Remove-Item Env:YT_DLP_SKIP_UPDATE
 
 ## 旧単独実行ファイルの削除（一度限り）
 
-移行用スクリプトは通常の利用から分けて`tools/migration/`に配置したのじゃ。**新しい仮想環境版のラッパーは削除しない**。
+Linux用の移行スクリプトを`tools/migration/`に配置したのじゃ。**新しい仮想環境版のラッパーは削除しない**。Windowsでは旧単独版の導入を行っていないため、削除作業は不要じゃ。
 
 **Linux**
 
@@ -104,15 +104,6 @@ bash tools/migration/remove-standalone.sh
 ```
 
 以前のインストーラーが使用した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`を確認し、単独配布されたZIP形式のyt-dlpだけ削除する。別の場所に置いた場合は`--path /path/to/yt-dlp`を指定するのじゃ。セットアップによって既にラッパーへ置換されていれば削除対象にはならん。
-
-**Windows（PowerShell）**
-
-```powershell
-.\tools\migration\remove-standalone.ps1 --dry-run
-.\tools\migration\remove-standalone.ps1
-```
-
-ユーザー領域の既知の配置先にある`yt-dlp.exe`を確認する。別の場所にある場合は`--path 'C:\Tools\yt-dlp.exe'`を指定するのじゃ。pip仮想環境の`Scripts\yt-dlp.exe`と`yt-dlp.cmd`は削除しない。
 
 ## 使用方法
 
@@ -145,5 +136,4 @@ bash tools/migration/remove-standalone.sh --help
 .\z__setup_yt-dlp.ps1 --help
 .\z__convert_config.ps1 --help
 .\z__run_sub_converter.ps1 -Help
-.\tools\migration\remove-standalone.ps1 --help
 ```
