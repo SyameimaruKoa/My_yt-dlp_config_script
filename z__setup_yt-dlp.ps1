@@ -162,6 +162,77 @@ if (-not (Test-Path -LiteralPath $GeneratedConfig)) {
 Copy-Item -LiteralPath $GeneratedConfig -Destination (Join-Path $ConfigDir 'config') -Force
 #endregion
 
+#region MPC-BE専用yt-dlp Shim
+function Test-MpcBePresent {
+    $AppDataDir = Join-Path $env:APPDATA 'MPC-BE'
+    if (Test-Path -LiteralPath $AppDataDir -PathType Container) {
+        return $true
+    }
+    foreach ($Name in @('mpc-be64.exe', 'mpc-be.exe')) {
+        if (Get-Command $Name -ErrorAction SilentlyContinue) {
+            return $true
+        }
+        foreach ($RegistryRoot in @(
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths',
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths'
+        )) {
+            if (Test-Path -LiteralPath (Join-Path $RegistryRoot $Name)) {
+                return $true
+            }
+        }
+    }
+    $InstallRoots = @(
+        $env:ProgramFiles,
+        [Environment]::GetEnvironmentVariable('ProgramFiles(x86)'),
+        (Join-Path $env:LOCALAPPDATA 'Programs')
+    )
+    foreach ($Root in $InstallRoots) {
+        if (-not $Root -or -not (Test-Path -LiteralPath $Root -PathType Container)) {
+            continue
+        }
+        foreach ($Folder in @('MPC-BE', 'MPC-BE x64', 'MPC-BE x86')) {
+            $Candidate = Join-Path $Root $Folder
+            foreach ($Name in @('mpc-be64.exe', 'mpc-be.exe')) {
+                if (Test-Path -LiteralPath (Join-Path $Candidate $Name) -PathType Leaf) {
+                    return $true
+                }
+            }
+        }
+    }
+    return $false
+}
+
+if (Test-MpcBePresent) {
+    $MpcYtDlpExe = Join-Path $VenvDir 'Scripts\yt-dlp.exe'
+    $MpcShimSource = Join-Path $PSScriptRoot 'tools\mpc_be_yt_dlp_shim.cs'
+    if (-not (Test-Path -LiteralPath $MpcYtDlpExe -PathType Leaf)) {
+        throw 'pip版yt-dlp.exeが見つからんぞ。'
+    }
+    if (-not (Test-Path -LiteralPath $MpcShimSource -PathType Leaf)) {
+        throw 'MPC-BE用Shimのソースが見つからんぞ。'
+    }
+    $MpcShimDirectory = Join-Path $env:APPDATA 'MPC-BE\yt-dlp'
+    New-Item -ItemType Directory -Path $MpcShimDirectory -Force | Out-Null
+    $MpcShimExe = Join-Path $MpcShimDirectory 'yt-dlp.exe'
+    $MpcShimConfig = Join-Path $MpcShimDirectory 'yt-dlp.shim'
+    $TempExe = Join-Path $env:TEMP ("yt-dlp-mpcbe-" + [Guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        Add-Type -Path $MpcShimSource -OutputAssembly $TempExe -OutputType ConsoleApplication -ErrorAction Stop
+        Copy-Item -LiteralPath $TempExe -Destination $MpcShimExe -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $TempExe -Force -ErrorAction SilentlyContinue
+    }
+    [System.IO.File]::WriteAllText(
+        $MpcShimConfig,
+        "$MpcYtDlpExe`n--ignore-config",
+        [System.Text.Encoding]::UTF8
+    )
+    Write-Output "MPC-BE専用yt-dlp: $MpcShimExe"
+    Write-Output 'MPC-BEのyt-dlp実行可能ファイルには上記のパスを指定するのじゃ。'
+}
+#endregion
+
 #region 完了
 Write-Output "セットアップ完了じゃ。"
 Write-Output "仮想環境: $VenvDir"
