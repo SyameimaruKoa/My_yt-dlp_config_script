@@ -95,3 +95,5 @@ jobs:
                   if ([string]::Join('|', $actual) -cne [string]::Join('|', $expected)) {
                       throw ("MPC-BE shim argument mismatch: " + [string]::Join('|', $actual))
                   }
+                  Write-Output 'MPC-BE shim test passed.'
+                  exit 0
