@@ -3,6 +3,7 @@ import importlib.metadata
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -18,14 +19,23 @@ def update():
         return 0
     extras = "yt-dlp[default,curl-cffi,secretstorage]" if sys.platform.startswith("linux") else "yt-dlp[default,curl-cffi]"
     lock_path = Path(sys.prefix) / "yt-dlp-update.lock"
-    with lock_path.open("a+b") as lock:
+    lock_path.touch(exist_ok=True)
+    with lock_path.open("r+b") as lock:
         if os.name == "nt":
             import msvcrt
+            if lock.seek(0, 2) == 0:
+                lock.write(b"0")
+                lock.flush()
             lock.seek(0)
-            lock.write(b"0")
-            lock.flush()
-            lock.seek(0)
-            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            for attempt in range(90):
+                try:
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if attempt == 89:
+                        print("別のyt-dlp更新処理が実行中じゃ。", file=sys.stderr)
+                        return 0
+                    time.sleep(1)
         else:
             import fcntl
             fcntl.flock(lock, fcntl.LOCK_EX)
