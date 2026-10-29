@@ -47,8 +47,23 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\z__setup_yt-dlp.ps1
 - YTSubConverter.exe（`YTSC_PATH`へ登録）
 - `yt-dlp config`から変換したWindows用設定（`%APPDATA%\yt-dlp\config`）
 - `yt-dlp.cmd`とユーザーPATH
+- MPC-BEが検出された場合は専用`yt-dlp.exe`を自動生成（通常のyt-dlp設定は変更しない）
 
 yt-dlpとpip依存パッケージの更新確認は、`yt-dlp`起動時に毎回自動実行される。セットアップ内容を更新する場合は、スクリプトを再実行するのじゃ。PATHの変更は新しいターミナルから有効になるぞ。
+
+### MPC-BE連携（Windows）
+
+MPC-BEが検出された場合、セットアップ時に次のファイルを生成するのじゃ。
+
+```text
+%APPDATA%\MPC-BE\yt-dlp\yt-dlp.exe
+%APPDATA%\MPC-BE\yt-dlp\yt-dlp.shim
+```
+
+MPC-BE側の「実行可能ファイル」には`%APPDATA%\MPC-BE\yt-dlp\yt-dlp.exe`のフルパスを指定する。既に同じパスを設定していれば変更不要じゃ。
+
+専用Shimはpip仮想環境の`Scripts\yt-dlp.exe`を呼び出し、`--ignore-config`を強制する。起動時のpip更新確認も実行し、通常の`yt-dlp`設定や`Register-CUIApplicationPath.ps1`は変更せんぞ。MPC-BEが未検出なら専用Shimは作成しない。
+
 
 ## Python仮想環境
 
