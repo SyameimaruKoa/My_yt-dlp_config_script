@@ -61,3 +61,36 @@ jobs:
                   python tools/yt_dlp_auto_update.py --help | Out-Null
                   python -m unittest discover -s tests -p 'test_*.py'
                   if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Check MPC-BE dedicated exe shim
+              shell: powershell
+              run: |
+                  $testDir = Join-Path $env:RUNNER_TEMP 'MPC BE Test'
+                  New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+                  $targetExe = Join-Path $testDir 'yt-dlp.exe'
+                  $shimExe = Join-Path $testDir 'mpc-be\yt-dlp.exe'
+                  $shimConfig = [System.IO.Path]::ChangeExtension($shimExe, '.shim')
+                  $output = Join-Path $testDir 'arguments.txt'
+                  $stub = @'
+                  using System;
+                  using System.IO;
+                  using System.Text;
+                  public static class Stub {
+                      public static int Main(string[] args) {
+                          File.WriteAllLines(Environment.GetEnvironmentVariable("YT_DLP_SHIM_TEST_OUTPUT"), args, new UTF8Encoding(false));
+                          return 17;
+                      }
+                  }
+                  '@
+                  Add-Type -TypeDefinition $stub -OutputAssembly $targetExe -OutputType ConsoleApplication
+                  New-Item -ItemType Directory -Path (Split-Path -Parent $shimExe) -Force | Out-Null
+                  Add-Type -Path 'tools/mpc_be_yt_dlp_shim.cs' -OutputAssembly $shimExe -OutputType ConsoleApplication
+                  [System.IO.File]::WriteAllText($shimConfig, "$targetExe`n--ignore-config", [System.Text.Encoding]::UTF8)
+                  $env:YT_DLP_SHIM_TEST_OUTPUT = $output
+                  $env:YT_DLP_SKIP_UPDATE = '1'
+                  & $shimExe '--format=bv*+ba' '日本語を含む 名前.mp4' '--output' 'C:\Video Files\%(title)s.%(ext)s'
+                  if ($LASTEXITCODE -ne 17) { throw 'MPC-BE shim did not pass through child exit code.' }
+                  $actual = [System.IO.File]::ReadAllLines($output, [System.Text.Encoding]::UTF8)
+                  $expected = @('--ignore-config', '--format=bv*+ba', '日本語を含む 名前.mp4', '--output', 'C:\Video Files\%(title)s.%(ext)s')
+                  if ([string]::Join('|', $actual) -cne [string]::Join('|', $expected)) {
+                      throw ("MPC-BE shim argument mismatch: " + [string]::Join('|', $actual))
+                  }
