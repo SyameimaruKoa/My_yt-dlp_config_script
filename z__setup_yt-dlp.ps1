@@ -79,17 +79,26 @@ if ($LASTEXITCODE -ne 0) {
 #endregion
 
 #region PATHとyt-dlpコマンド
+$UpdaterSource = Join-Path $PSScriptRoot 'tools\yt_dlp_auto_update.py'
+$UpdaterTarget = Join-Path $env:LOCALAPPDATA 'yt-dlp\auto_update.py'
+if (-not (Test-Path -LiteralPath $UpdaterSource)) {
+    throw '起動時の自動更新スクリプトが見つからんぞ。'
+}
+Copy-Item -LiteralPath $UpdaterSource -Destination $UpdaterTarget -Force
 $ShimPath = Join-Path $BinDir 'yt-dlp.cmd'
 $ShimLines = @(
     '@echo off',
     'chcp 932 >nul',
+    'if not "%YT_DLP_SKIP_UPDATE%"=="1" if exist "%LOCALAPPDATA%\yt-dlp\auto_update.py" (',
+    '    "%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" "%LOCALAPPDATA%\yt-dlp\auto_update.py"',
+    ')',
     'if "%~1"=="" goto help',
     'if /I "%~1"=="-h" goto help',
     'if /I "%~1"=="--help" goto help',
-    ('"{0}" -m yt_dlp %*' -f $VenvPython),
+    '"%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" -m yt_dlp %*',
     'exit /b %errorlevel%',
     ':help',
-    ('"{0}" -m yt_dlp --help' -f $VenvPython),
+    '"%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" -m yt_dlp --help',
     'exit /b %errorlevel%'
 )
 [System.IO.File]::WriteAllLines($ShimPath, $ShimLines, [System.Text.Encoding]::GetEncoding(932))
@@ -100,6 +109,7 @@ if ($PathParts -notcontains $BinDir) {
 }
 $env:Path = "$BinDir;$env:Path"
 Write-Output "yt-dlpコマンドを登録したぞ: $ShimPath"
+Write-Output "起動時のpip更新確認: $UpdaterTarget"
 #endregion
 
 #region ffmpeg・aria2・Deno
