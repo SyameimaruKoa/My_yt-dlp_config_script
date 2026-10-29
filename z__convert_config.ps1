@@ -3,7 +3,7 @@
     'yt-dlp config' (Linux用) を 'win yt-dlp config' (Windows用) に変換するのじゃ。
 .DESCRIPTION
     Linux用設定ファイルをWindows用に変換します。
-    1. /tmp を %TEMP% に置換
+    1. /tmp をWindowsの一時ディレクトリ絶対パスに置換
     2. Linux用 --exec (Koa_Discord_Message.sh) をコメントアウト
     3. Windows用 --exec (プレースホルダー %SCRIPT_DIR% を含む行) を
        コメント解除し、パスを $PSScriptRoot に置換
@@ -65,21 +65,7 @@ try {
             
             $OutputLines.Add($FinalExecCommand)
         }
-        elseif ($_ -match '^\s*-P\s+temp:/tmp\s*
-    }
-
-    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($false)))
-
-    Write-Output "--------------------"
-    Write-Output "変換完了！"
-    Write-Output "'$OutputFile' が正常に生成されました。"
-
-}
-catch {
-    Write-Error "エラー: 変換または出力ファイル ($OutputFile) への書き込みに失敗"
-    Write-Error $_
-    exit 1
-}) {
+        elseif ($_ -match '^\s*-P\s+temp:/tmp\s*$') {
             $OutputLines.Add(('-P "temp:{0}"' -f $env:TEMP))
         }
         else {
@@ -87,7 +73,7 @@ catch {
         }
     }
 
-    Set-Content -Path $OutputFile -Value $OutputLines -Encoding Utf8 -ErrorAction Stop
+    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($false)))
 
     Write-Output "--------------------"
     Write-Output "変換完了！"
