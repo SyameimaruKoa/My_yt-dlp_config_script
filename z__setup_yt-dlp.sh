@@ -19,12 +19,12 @@ show_help() {
 1. 必須パッケージ (git, ffmpeg, python3, curl, wget, aria2) の準備
    Ubuntu / Debian: apt-get
    Bazzite: Homebrew (OS本体の変更・再起動なし)
-2. yt-dlp の最新 Nightly ビルドをインストール
+2. Python仮想環境にyt-dlp Nightlyとpip追加依存関係をインストール
 3. YTSubConverter.exe をダウンロードして配置
 4. UMU Launcher でProtonを利用 (Wine/Monoの手動インストール不要)
    Bazzite: インストール済みProtonを優先
    Ubuntu / Debian: Steam不要のUMU-Protonを自動取得
-5. Gist から設定ファイルと字幕変換スクリプトを取得
+5. このGitHubリポジトリから設定ファイルと字幕変換スクリプトを取得
 6. Deno (JavaScriptランタイム) をインストール
 7. 各種シンボリックリンクを作成
 
@@ -60,8 +60,17 @@ else
 fi
 
 LOCAL_BIN="$HOME/.local/bin"
+VENV_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/venv"
+UPDATER_PATH="$(dirname "$VENV_DIR")/auto_update.py"
 mkdir -p "$LOCAL_BIN"
 export PATH="$LOCAL_BIN:$PATH"
+
+# 新しいターミナルでも ~/.local/bin を先頭で検索する
+for startup_file in "$HOME/.profile" "$HOME/.bashrc"; do
+    if ! grep -Fq '# yt-dlp local bin path' "$startup_file" 2>/dev/null; then
+        printf '\n# yt-dlp local bin path\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$startup_file"
+    fi
+done
 
 download_file() {
     local url="$1"
@@ -284,7 +293,7 @@ if [ "$OS_TYPE" = "bazzite" ]; then
 else
     echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
     sudo apt-get update
-    sudo apt-get install -y ffmpeg git python3 curl wget aria2 ca-certificates
+    sudo apt-get install -y ffmpeg git python3 python3-venv curl wget aria2 ca-certificates
 fi
 
 install_umu
@@ -301,27 +310,50 @@ else
 fi
 echo "---"
 
-# --- 2. yt-dlp (Nightly) のインストール ---
-URL="https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp"
-if [ "$OS_TYPE" = "bazzite" ]; then
-    TARGET_PATH="$LOCAL_BIN/yt-dlp"
-else
-    TARGET_PATH="/usr/local/bin/yt-dlp"
+# --- 2. yt-dlp Nightly と追加pipパッケージを仮想環境に導入 ---
+echo "Python仮想環境を準備中: $VENV_DIR"
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+    echo "エラー: Python 3.11以上が必要じゃ。" >&2
+    exit 1
 fi
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+    python3 -m venv "$VENV_DIR"
+fi
+if ! "$VENV_DIR/bin/python" -m pip --version > /dev/null 2>&1; then
+    echo "エラー: 仮想環境内のpipが利用できん。python3-venvを確認するのじゃ。" >&2
+    exit 1
+fi
+echo "yt-dlp Nightlyと追加依存関係をインストール中..."
+"$VENV_DIR/bin/python" -m pip install --upgrade --upgrade-strategy eager --pre 'yt-dlp[default,curl-cffi,secretstorage]'
 
-echo "yt-dlp (Nightly) を更新中..."
-if [ "$OS_TYPE" = "bazzite" ]; then
-    download_file "$URL" "$TARGET_PATH"
-    chmod a+rx "$TARGET_PATH"
-else
-    TEMP_YTDLP=$(mktemp)
-    trap 'rm -f "$TEMP_YTDLP"' EXIT
-    download_file "$URL" "$TEMP_YTDLP"
-    sudo install -m 755 "$TEMP_YTDLP" "$TARGET_PATH"
-    rm -f "$TEMP_YTDLP"
-    trap - EXIT
+# 仮想環境を手動でactivateしなくても通常のyt-dlpコマンドで実行する
+TARGET_PATH="$LOCAL_BIN/yt-dlp"
+WRAPPER_TMP=$(mktemp)
+{
+    printf '#!/bin/bash\n# yt-dlp venv wrapper\n'
+    printf 'VENV_PYTHON=%q\n' "$VENV_DIR/bin/python"
+    printf 'UPDATER=%q\n' "$UPDATER_PATH"
+    cat <<'EOF_YTDLP_WRAPPER'
+show_help() {
+    exec "$VENV_PYTHON" -m yt_dlp --help
+}
+if [ -f "$UPDATER" ] && [ "${YT_DLP_SKIP_UPDATE:-}" != "1" ]; then
+    "$VENV_PYTHON" "$UPDATER" || true
 fi
-echo "yt-dlp 更新完了。"
+case "${1:-}" in
+    -h|--help) show_help ;;
+esac
+exec "$VENV_PYTHON" -m yt_dlp "$@"
+EOF_YTDLP_WRAPPER
+} > "$WRAPPER_TMP"
+install -m 755 "$WRAPPER_TMP" "$TARGET_PATH"
+if [ "$OS_TYPE" = "apt" ]; then
+    # 旧セットアップの /usr/local/bin/yt-dlp も仮想環境ラッパーに更新
+    sudo install -m 755 "$WRAPPER_TMP" /usr/local/bin/yt-dlp
+fi
+rm -f "$WRAPPER_TMP"
+echo "yt-dlpコマンド: $TARGET_PATH"
+"$VENV_DIR/bin/python" -m yt_dlp --version
 echo "---"
 
 # --- 3. Windows版 YTSubConverter.exe のインストール ---
@@ -338,35 +370,41 @@ echo "---"
 echo "YTSubConverter.exeはUMU / Proton経由で実行するぞ。"
 echo "---"
 
-# --- 5. Gist設定のクローン & リンク作成 ---
-GIST_DIR="$HOME/21141912fbacf40877f4cf877577e082"
-GIST_URL="https://gist.github.com/21141912fbacf40877f4cf877577e082.git"
+# --- 5. リポジトリ内の設定と字幕変換スクリプトをリンク ---
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 CONFIG_DIR="$HOME/.config/yt-dlp"
+if [ -f "$SCRIPT_DIR/yt-dlp config" ] && [ -f "$SCRIPT_DIR/z__run_sub_converter.sh" ]; then
+    SOURCE_DIR="$SCRIPT_DIR"
+else
+    SOURCE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/My_yt-dlp_config_script"
+    REPO_URL="https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git"
+    if [ -d "$SOURCE_DIR/.git" ]; then
+        git -C "$SOURCE_DIR" pull --ff-only
+    elif [ -e "$SOURCE_DIR" ]; then
+        echo "エラー: $SOURCE_DIR は既存のGitリポジトリではないぞ。" >&2
+        exit 1
+    else
+        mkdir -p "$(dirname "$SOURCE_DIR")"
+        git clone "$REPO_URL" "$SOURCE_DIR"
+    fi
+fi
 
 LINK_CONFIG="$CONFIG_DIR/config"
 LINK_SCRIPT="$CONFIG_DIR/z__run_sub_converter.sh"
-SOURCE_CONFIG="$GIST_DIR/yt-dlp config"
-SOURCE_SCRIPT="$GIST_DIR/z__run_sub_converter.sh"
-
-if [ ! -d "$GIST_DIR/.git" ]; then
-    if [ -e "$GIST_DIR" ]; then
-        echo "エラー: $GIST_DIR は既に存在するがGitリポジトリではないぞ。" >&2
-        exit 1
-    fi
-    git clone "$GIST_URL" "$GIST_DIR"
-else
-    git -C "$GIST_DIR" pull --ff-only
-fi
-
-if [ ! -f "$SOURCE_CONFIG" ] || [ ! -f "$SOURCE_SCRIPT" ]; then
-    echo "エラー: Gistの設定ファイルまたは字幕変換スクリプトが見つからん。" >&2
+SOURCE_CONFIG="$SOURCE_DIR/yt-dlp config"
+SOURCE_SCRIPT="$SOURCE_DIR/z__run_sub_converter.sh"
+UPDATER_SOURCE="$SOURCE_DIR/tools/yt_dlp_auto_update.py"
+if [ ! -f "$UPDATER_SOURCE" ]; then
+    echo "エラー: 更新確認スクリプトが見つからん: $UPDATER_SOURCE" >&2
     exit 1
 fi
-
+install -m 644 "$UPDATER_SOURCE" "$UPDATER_PATH"
 mkdir -p "$CONFIG_DIR"
 ln -s -f "$SOURCE_CONFIG" "$LINK_CONFIG"
 ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
 chmod +x "$SOURCE_SCRIPT"
+echo "設定ファイル: $LINK_CONFIG"
+echo "yt-dlp起動時の自動更新: $UPDATER_PATH"
 echo "---"
 
 # --- 6. Deno のインストール ---

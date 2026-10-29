@@ -1,0 +1,99 @@
+name: Script validation
+
+on:
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    linux:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Check Bash syntax and help
+              shell: bash
+              run: |
+                  bash -n z__setup_yt-dlp.sh z__run_sub_converter.sh
+                  bash z__setup_yt-dlp.sh --help
+                  bash z__run_sub_converter.sh --help
+                  bash -n tools/migration/remove-standalone.sh
+                  bash tools/migration/remove-standalone.sh --help
+                  python3 tools/yt_dlp_auto_update.py --help
+                  python3 -m unittest discover -s tests -p 'test_*.py'
+            - name: Check Linux standalone migration
+              shell: bash
+              run: |
+                  python3 - <<'PY'
+                  import pathlib
+                  import subprocess
+                  import tempfile
+                  import zipfile
+
+                  with tempfile.TemporaryDirectory() as temp:
+                      old = pathlib.Path(temp) / "yt-dlp"
+                      with zipfile.ZipFile(old, "w") as archive:
+                          archive.writestr("yt_dlp/__main__.py", "")
+                          archive.writestr("yt_dlp/version.py", "")
+                      subprocess.run(["bash", "tools/migration/remove-standalone.sh", "--dry-run", "--path", str(old)], check=True)
+                      assert old.exists()
+                      subprocess.run(["bash", "tools/migration/remove-standalone.sh", "--path", str(old)], check=True)
+                      assert not old.exists()
+                  PY
+    windows:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Check PowerShell syntax, help and config conversion
+              shell: powershell
+              run: |
+                  foreach ($file in Get-ChildItem -Recurse -Filter '*.ps1') {
+                      $tokens = $null
+                      $parseErrors = $null
+                      [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+                      if ($parseErrors.Count -gt 0) { throw "$($file.Name): $parseErrors" }
+                  }
+                  .\z__setup_yt-dlp.ps1 --help | Out-Null
+                  .\z__convert_config.ps1 --help | Out-Null
+                  .\z__run_sub_converter.ps1 -Help | Out-Null
+                  .\z__convert_config.ps1 | Out-Null
+                  $content = Get-Content -LiteralPath 'win yt-dlp config' -Raw -Encoding UTF8
+                  $expected = '-P "temp:' + $env:TEMP + '"'
+                  if (-not $content.Contains($expected)) { throw 'Windows temp path was not converted.' }
+                  python tools/yt_dlp_auto_update.py --help | Out-Null
+                  python -m unittest discover -s tests -p 'test_*.py'
+                  if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Check MPC-BE dedicated exe shim
+              shell: powershell
+              run: |
+                  $testDir = Join-Path $env:RUNNER_TEMP 'MPC BE Test'
+                  New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+                  $targetExe = Join-Path $testDir 'yt-dlp.exe'
+                  $shimExe = Join-Path $testDir 'mpc-be\yt-dlp.exe'
+                  $shimConfig = [System.IO.Path]::ChangeExtension($shimExe, '.shim')
+                  $output = Join-Path $testDir 'arguments.txt'
+                  $stub = @'
+                  using System;
+                  using System.IO;
+                  using System.Text;
+                  public static class Stub {
+                      public static int Main(string[] args) {
+                          File.WriteAllLines(Environment.GetEnvironmentVariable("YT_DLP_SHIM_TEST_OUTPUT"), args, new UTF8Encoding(false));
+                          return 17;
+                      }
+                  }
+                  '@
+                  Add-Type -TypeDefinition $stub -OutputAssembly $targetExe -OutputType ConsoleApplication
+                  New-Item -ItemType Directory -Path (Split-Path -Parent $shimExe) -Force | Out-Null
+                  Add-Type -Path 'tools/mpc_be_yt_dlp_shim.cs' -OutputAssembly $shimExe -OutputType ConsoleApplication
+                  [System.IO.File]::WriteAllText($shimConfig, "$targetExe`n--ignore-config", [System.Text.Encoding]::UTF8)
+                  $env:YT_DLP_SHIM_TEST_OUTPUT = $output
+                  $env:YT_DLP_SKIP_UPDATE = '1'
+                  $jpArgument = (-join @([char]0x65e5, [char]0x672c, [char]0x8a9e)) + ' name.mp4'
+                  & $shimExe '--format=bv*+ba' $jpArgument '--output' 'C:\Video Files\%(title)s.%(ext)s'
+                  if ($LASTEXITCODE -ne 17) { throw 'MPC-BE shim did not pass through child exit code.' }
+                  $actual = [System.IO.File]::ReadAllLines($output, [System.Text.Encoding]::UTF8)
+                  $expected = @('--ignore-config', '--format=bv*+ba', $jpArgument, '--output', 'C:\Video Files\%(title)s.%(ext)s')
+                  if ([string]::Join('|', $actual) -cne [string]::Join('|', $expected)) {
+                      throw ("MPC-BE shim argument mismatch: " + [string]::Join('|', $actual))
+                  }
+                  Write-Output 'MPC-BE shim test passed.'
+                  exit 0

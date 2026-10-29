@@ -3,7 +3,7 @@
     'yt-dlp config' (Linux用) を 'win yt-dlp config' (Windows用) に変換するのじゃ。
 .DESCRIPTION
     Linux用設定ファイルをWindows用に変換します。
-    1. /tmp を %TEMP% に置換
+    1. /tmp をWindowsの一時ディレクトリ絶対パスに置換
     2. Linux用 --exec (Koa_Discord_Message.sh) をコメントアウト
     3. Windows用 --exec (プレースホルダー %SCRIPT_DIR% を含む行) を
        コメント解除し、パスを $PSScriptRoot に置換
@@ -12,20 +12,26 @@
 .NOTES
     文字コード: UTF-8 BOM で保存
 #>
-param (
-    [switch]$Help
-)
-
-if ($Help) {
+#region 引数とヘルプ
+if ($args.Count -eq 1 -and $args[0] -in @('-h', '--help', '-Help')) {
     Get-Help -Detailed $MyInvocation.MyCommand.Path
     exit 0
 }
+if ($args.Count -gt 0) {
+    Write-Error "不明な引数じゃ: $($args -join ' ')"
+    exit 1
+}
+#endregion
 
+#region 入出力
 $ScriptDirectory = $PSScriptRoot
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
 $OutputFile = Join-Path $ScriptDirectory "win yt-dlp config"
 $Placeholder = "%SCRIPT_DIR%"
 $LinuxExecMarker = ".sh "
+#endregion
+
+#region 変換処理
 
 Write-Output "PowerShell 変換ロジック (z__convert_config.ps1) を実行中..."
 Write-Output "入力: $InputFile"
@@ -55,17 +61,19 @@ try {
             $UncommentedLine = $_.TrimStart('#')
             
             # 2. プレースホルダーを $ScriptDirectory (絶対パス) に置換
-            $FinalExecCommand = $UncommentedLine -replace [regex]::Escape($Placeholder), $ScriptDirectory
+            $FinalExecCommand = $UncommentedLine.Replace($Placeholder, $ScriptDirectory)
             
             $OutputLines.Add($FinalExecCommand)
         }
+        elseif ($_ -match '^\s*-P\s+temp:/tmp\s*$') {
+            $OutputLines.Add(('-P "temp:{0}"' -f $env:TEMP))
+        }
         else {
-            # /tmp を %TEMP% に置換
-            $OutputLines.Add(($_ -replace '/tmp', '%TEMP%'))
+            $OutputLines.Add($_.Replace('/tmp', $env:TEMP))
         }
     }
 
-    Set-Content -Path $OutputFile -Value $OutputLines -Encoding Utf8 -ErrorAction Stop
+    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($false)))
 
     Write-Output "--------------------"
     Write-Output "変換完了！"
@@ -77,3 +85,4 @@ catch {
     Write-Error $_
     exit 1
 }
+#endregion
