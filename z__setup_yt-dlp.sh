@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# yt-dlp (Nightly) と Windows版YTSubConverter.exe (Wine動作) をセットアップするのじゃ
+# yt-dlp (Nightly) と Windows版YTSubConverter.exe (UMU / Proton動作) をセットアップするのじゃ
 # Ubuntu / Debian と Bazzite に対応
 #
 # 使用法: ./z__setup_yt-dlp.sh
@@ -16,18 +16,22 @@ show_help() {
         $(basename "$0") -h | --help
 
 機能:
-1. 必須パッケージ (git, ffmpeg, python3, curl, wget, aria2, Wine) の準備
+1. 必須パッケージ (git, ffmpeg, python3, curl, wget, aria2) の準備
    Ubuntu / Debian: apt-get
-   Bazzite: Homebrew と Distrobox (OS本体の変更・再起動なし)
+   Bazzite: Homebrew (OS本体の変更・再起動なし)
 2. yt-dlp の最新 Nightly ビルドをインストール
 3. YTSubConverter.exe をダウンロードして配置
-4. Wine Mono 9.0.0 をダウンロードしてインストール
+4. UMU Launcher でProtonを利用 (Wine/Monoの手動インストール不要)
+   Bazzite: インストール済みProtonを優先
+   Ubuntu / Debian: Steam不要のUMU-Protonを自動取得
 5. Gist から設定ファイルと字幕変換スクリプトを取得
 6. Deno (JavaScriptランタイム) をインストール
 7. 各種シンボリックリンクを作成
 
 オプション:
 -h, --help  このヘルプを表示するのじゃ
+
+PROTON_PATH=/path/to/Proton を指定すればProtonの自動選択を上書きできるぞ。
 EOF_HELP
 }
 
@@ -126,56 +130,165 @@ install_bazzite_dependencies() {
     done
 }
 
-setup_bazzite_wine() {
-    local box_name="yt-dlp-wine"
-    local wine_wrapper="$LOCAL_BIN/wine"
-
-    if command -v wine > /dev/null 2>&1 && \
-        ! { [ -f "$wine_wrapper" ] && grep -Fq 'distrobox enter -n yt-dlp-wine' "$wine_wrapper"; }; then
-        echo "既存のWineを使用するぞ。"
+install_umu() {
+    if command -v umu-run > /dev/null 2>&1; then
+        echo "UMU Launcher: $(command -v umu-run)"
         return
     fi
 
-    if ! command -v distrobox > /dev/null 2>&1 || \
-        ! command -v podman > /dev/null 2>&1; then
-        echo "エラー: Distrobox と Podman が必要じゃ。" >&2
+    if [ "$OS_TYPE" = "bazzite" ]; then
+        echo "エラー: umu-runが見つからん。Bazziteのシステム更新でUMU Launcherを導入するのじゃ。" >&2
         exit 1
     fi
 
-    if ! podman container exists "$box_name"; then
-        echo "Wine用Distroboxを作成中..."
-        distrobox create --name "$box_name" --image quay.io/fedora/fedora:44 \
-            --volume /tmp:/tmp:rw --yes
-    fi
+    local distro version arch suffix checksum filename url tempdir
+    . /etc/os-release
+    distro="$ID"
+    version="${VERSION_ID:-}"
+    arch=$(dpkg --print-architecture)
+    case "$distro:$version:$arch" in
+        ubuntu:24.04:amd64) suffix=ubuntu-noble; checksum=86b7a234f77fbcd13699654656192a12ed3852ec2bcc721506ae4f91436b3793 ;;
+        ubuntu:26.04:amd64) suffix=ubuntu-resolute; checksum=5ec92ee8b2f3066d927d573cb485759dd96c3bdf73d25b0a39ec110fb974b502 ;;
+        debian:12:amd64) suffix=debian-12; checksum=4197f59434deba9beeec97c16e2ef481e80d77390da178a99b10c8ea086cfd38 ;;
+        debian:13:amd64) suffix=debian-13; checksum=602c4ac7210a54b835530f927b10c2781e51e294b1cf46448006e48fae66f232 ;;
+        *) echo "エラー: $distro $version ($arch) 用のUMU Launcherが見つからん。先にumu-runを導入するのじゃ。" >&2; exit 1 ;;
+    esac
 
-    echo "Distrobox内のWineを確認・インストール中..."
-    distrobox enter -n "$box_name" -- sudo dnf install -y wine-core
-
-    if [ -e "$wine_wrapper" ] && \
-        ! grep -Fq 'distrobox enter -n yt-dlp-wine' "$wine_wrapper"; then
-        echo "エラー: $wine_wrapper は既存のファイルじゃ。上書きはしないぞ。" >&2
+    filename="python3-umu-launcher_1.4.4-1_${arch}_${suffix}.deb"
+    url="https://github.com/Open-Wine-Components/umu-launcher/releases/download/1.4.4/$filename"
+    tempdir=$(mktemp -d)
+    if ! download_file "$url" "$tempdir/$filename"; then
+        rm -rf "$tempdir"
         exit 1
     fi
+    if ! printf '%s  %s\n' "$checksum" "$tempdir/$filename" | sha256sum -c -; then
+        rm -rf "$tempdir"
+        echo "エラー: UMU Launcherのチェックサムが一致せん。" >&2
+        exit 1
+    fi
+    sudo apt-get install -y "$tempdir/$filename"
+    rm -rf "$tempdir"
+    if ! command -v umu-run > /dev/null 2>&1; then
+        echo "エラー: UMU Launcherのインストールに失敗したぞ。" >&2
+        exit 1
+    fi
+}
 
-    cat > "$wine_wrapper" << 'EOF_WINE'
-#!/bin/bash
-exec distrobox enter -n yt-dlp-wine -- /usr/bin/wine "$@"
-EOF_WINE
+setup_proton_wrapper() {
+    local wine_wrapper="$LOCAL_BIN/wine"
+    local root candidate library_dir proton_script="" proton_dir=""
+    local -a steam_roots=()
+    local -a proton_candidates=()
+    local -a preferred_candidates=()
+
+    if [ -n "${PROTON_PATH:-}" ]; then
+        if [ -f "$PROTON_PATH/proton" ]; then
+            proton_script="$PROTON_PATH/proton"
+        elif [ -f "$PROTON_PATH" ] && [ "$(basename "$PROTON_PATH")" = "proton" ]; then
+            proton_script="$PROTON_PATH"
+        else
+            echo "エラー: 指定したProtonが見つからん: $PROTON_PATH" >&2
+            exit 1
+        fi
+    elif [ "$OS_TYPE" = "bazzite" ]; then
+        for root in "$HOME/.steam/root" "$HOME/.local/share/Steam" \
+            "$HOME/.steam/steam" "$HOME/.var/app/com.valvesoftware.Steam/data/Steam"; do
+            if [ -d "$root/steamapps" ]; then
+                steam_roots+=("$root")
+                if [ -f "$root/steamapps/libraryfolders.vdf" ]; then
+                    while IFS= read -r library_dir; do
+                        if [ -d "$library_dir/steamapps" ]; then
+                            steam_roots+=("$library_dir")
+                        fi
+                    done < <(awk -F '"' '$2 == "path" { print $4 }' "$root/steamapps/libraryfolders.vdf")
+                fi
+            fi
+        done
+        for root in "${steam_roots[@]}"; do
+            for candidate in "$root"/compatibilitytools.d/*/proton \
+                "$root"/steamapps/common/Proton*/proton; do
+                if [ -f "$candidate" ]; then
+                    proton_candidates+=("$candidate")
+                    case "$(basename "$(dirname "$candidate")")" in
+                        Proton\ [0-9]*|GE-Proton*) preferred_candidates+=("$candidate") ;;
+                    esac
+                fi
+            done
+        done
+        if [ "${#preferred_candidates[@]}" -gt 0 ]; then
+            proton_script=$(printf '%s\n' "${preferred_candidates[@]}" | LC_ALL=C sort -V | tail -n 1)
+        elif [ "${#proton_candidates[@]}" -gt 0 ]; then
+            proton_script=$(printf '%s\n' "${proton_candidates[@]}" | LC_ALL=C sort -V | tail -n 1)
+        fi
+    fi
+
+    if [ -n "$proton_script" ]; then
+        proton_dir=$(dirname "$(readlink -f "$proton_script")")
+        echo "使用するProton: $proton_dir"
+    else
+        echo "UMU-Protonを使用するぞ (初回起動時に取得)。"
+    fi
+
+    if [ -e "$wine_wrapper" ] || [ -L "$wine_wrapper" ]; then
+        if ! { [ -f "$wine_wrapper" ] &&
+            { grep -Fq '# yt-dlp UMU Proton wrapper' "$wine_wrapper" ||
+              grep -Fq '# yt-dlp Proton wrapper' "$wine_wrapper" ||
+              grep -Fq 'distrobox enter -n yt-dlp-wine' "$wine_wrapper"; }; }; then
+            echo "エラー: $wine_wrapper は既存のファイルじゃ。上書きはしないぞ。" >&2
+            exit 1
+        fi
+    fi
+
+    {
+        printf '#!/bin/bash\n# yt-dlp UMU Proton wrapper\n'
+        printf 'DEFAULT_PROTON_DIR=%q\n' "$proton_dir"
+        cat << 'EOF_PROTON'
+set -e
+show_help() {
+    cat << 'EOF_HELP'
+使用法: wine <Windowsプログラム.exe> [引数...]
+        wine -h | --help
+
+UMU LauncherからProtonを起動し、yt-dlp専用のPrefixを使用するのじゃ。
+YT_DLP_PROTON_PATHで利用するProtonを上書きできるぞ。
+EOF_HELP
+}
+if [ "$#" -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_help
+    exit 0
+fi
+if ! command -v umu-run > /dev/null 2>&1; then
+    echo "エラー: umu-runが見つからん。" >&2
+    exit 1
+fi
+export GAMEID="umu-default"
+export WINEPREFIX="${YT_DLP_WINEPREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/proton-prefix}"
+mkdir -p "$WINEPREFIX"
+if [ -n "${YT_DLP_PROTON_PATH:-}" ]; then
+    export PROTONPATH="$YT_DLP_PROTON_PATH"
+elif [ -z "${PROTONPATH:-}" ] && [ -n "$DEFAULT_PROTON_DIR" ]; then
+    export PROTONPATH="$DEFAULT_PROTON_DIR"
+fi
+exec umu-run "$@"
+EOF_PROTON
+    } > "$wine_wrapper"
     chmod +x "$wine_wrapper"
+    echo "UMU / Protonラッパーを配置したぞ: $wine_wrapper"
 }
 
 echo "yt-dlpをセットアップするのじゃ (OS: $OS_TYPE)"
 
-# --- 1. 必須パッケージ (Wine含む) のインストール ---
+# --- 1. 必須パッケージのインストール ---
 if [ "$OS_TYPE" = "bazzite" ]; then
     install_bazzite_dependencies
-    setup_bazzite_wine
 else
     echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
     sudo apt-get update
-    sudo apt-get install -y ffmpeg git python3 curl wget aria2 wine
+    sudo apt-get install -y ffmpeg git python3 curl wget aria2 ca-certificates
 fi
 
+install_umu
+setup_proton_wrapper
 echo "システムパッケージの準備完了じゃ。"
 echo "---"
 
@@ -221,27 +334,8 @@ download_file "$EXE_URL" "$EXE_PATH"
 echo "EXE配置完了。"
 echo "---"
 
-# --- 4. Wine Mono の手動インストール ---
-echo "Wine Mono 9.0.0 をセットアップするぞ..."
-MONO_VERSION="9.0.0"
-MONO_MSI="wine-mono-${MONO_VERSION}-x86.msi"
-MONO_URL="https://dl.winehq.org/wine/wine-mono/${MONO_VERSION}/${MONO_MSI}"
-
-if [ "$OS_TYPE" = "bazzite" ]; then
-    TEMP_MSI="$HOME/.cache/yt-dlp/$MONO_MSI"
-else
-    TEMP_MSI="/tmp/$MONO_MSI"
-fi
-
-if [ ! -s "$TEMP_MSI" ]; then
-    echo "インストーラーをダウンロード中..."
-    download_file "$MONO_URL" "$TEMP_MSI"
-fi
-
-echo "Wine Mono をインストール中 (画面は出ないぞ)..."
-wine msiexec /i "$TEMP_MSI"
-echo "インストールコマンド送信完了。少し待機する..."
-sleep 5
+# --- 4. Protonの準備 ---
+echo "YTSubConverter.exeはUMU / Proton経由で実行するぞ。"
 echo "---"
 
 # --- 5. Gist設定のクローン & リンク作成 ---
