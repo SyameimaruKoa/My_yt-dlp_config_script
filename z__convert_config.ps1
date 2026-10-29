@@ -12,20 +12,26 @@
 .NOTES
     文字コード: UTF-8 BOM で保存
 #>
-param (
-    [switch]$Help
-)
-
-if ($Help) {
+#region 引数とヘルプ
+if ($args.Count -eq 1 -and $args[0] -in @('-h', '--help', '-Help')) {
     Get-Help -Detailed $MyInvocation.MyCommand.Path
     exit 0
 }
+if ($args.Count -gt 0) {
+    Write-Error "不明な引数じゃ: $($args -join ' ')"
+    exit 1
+}
+#endregion
 
+#region 入出力
 $ScriptDirectory = $PSScriptRoot
 $InputFile = Join-Path $ScriptDirectory "yt-dlp config"
 $OutputFile = Join-Path $ScriptDirectory "win yt-dlp config"
 $Placeholder = "%SCRIPT_DIR%"
 $LinuxExecMarker = ".sh "
+#endregion
+
+#region 変換処理
 
 Write-Output "PowerShell 変換ロジック (z__convert_config.ps1) を実行中..."
 Write-Output "入力: $InputFile"
@@ -55,13 +61,29 @@ try {
             $UncommentedLine = $_.TrimStart('#')
             
             # 2. プレースホルダーを $ScriptDirectory (絶対パス) に置換
-            $FinalExecCommand = $UncommentedLine -replace [regex]::Escape($Placeholder), $ScriptDirectory
+            $FinalExecCommand = $UncommentedLine.Replace($Placeholder, $ScriptDirectory)
             
             $OutputLines.Add($FinalExecCommand)
         }
+        elseif ($_ -match '^\s*-P\s+temp:/tmp\s*
+    }
+
+    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($false)))
+
+    Write-Output "--------------------"
+    Write-Output "変換完了！"
+    Write-Output "'$OutputFile' が正常に生成されました。"
+
+}
+catch {
+    Write-Error "エラー: 変換または出力ファイル ($OutputFile) への書き込みに失敗"
+    Write-Error $_
+    exit 1
+}) {
+            $OutputLines.Add(('-P "temp:{0}"' -f $env:TEMP))
+        }
         else {
-            # /tmp を %TEMP% に置換
-            $OutputLines.Add(($_ -replace '/tmp', '%TEMP%'))
+            $OutputLines.Add($_.Replace('/tmp', $env:TEMP))
         }
     }
 
@@ -77,3 +99,4 @@ catch {
     Write-Error $_
     exit 1
 }
+#endregion
