@@ -15,6 +15,29 @@ jobs:
                   bash -n z__setup_yt-dlp.sh z__run_sub_converter.sh
                   bash z__setup_yt-dlp.sh --help
                   bash z__run_sub_converter.sh --help
+                  bash -n tools/migration/remove-standalone.sh
+                  bash tools/migration/remove-standalone.sh --help
+                  python3 tools/yt_dlp_auto_update.py --help
+                  python3 -m unittest discover -s tests -p 'test_*.py'
+            - name: Check Linux standalone migration
+              shell: bash
+              run: |
+                  python3 - <<'PY'
+                  import pathlib
+                  import subprocess
+                  import tempfile
+                  import zipfile
+
+                  with tempfile.TemporaryDirectory() as temp:
+                      old = pathlib.Path(temp) / "yt-dlp"
+                      with zipfile.ZipFile(old, "w") as archive:
+                          archive.writestr("yt_dlp/__main__.py", "")
+                          archive.writestr("yt_dlp/version.py", "")
+                      subprocess.run(["bash", "tools/migration/remove-standalone.sh", "--dry-run", "--path", str(old)], check=True)
+                      assert old.exists()
+                      subprocess.run(["bash", "tools/migration/remove-standalone.sh", "--path", str(old)], check=True)
+                      assert not old.exists()
+                  PY
     windows:
         runs-on: windows-latest
         steps:
@@ -22,7 +45,7 @@ jobs:
             - name: Check PowerShell syntax, help and config conversion
               shell: powershell
               run: |
-                  foreach ($file in Get-ChildItem -Filter '*.ps1') {
+                  foreach ($file in Get-ChildItem -Recurse -Filter '*.ps1') {
                       $tokens = $null
                       $parseErrors = $null
                       [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
@@ -35,3 +58,13 @@ jobs:
                   $content = Get-Content -LiteralPath 'win yt-dlp config' -Raw -Encoding UTF8
                   $expected = '-P "temp:' + $env:TEMP + '"'
                   if (-not $content.Contains($expected)) { throw 'Windows temp path was not converted.' }
+                  .\tools\migration\remove-standalone.ps1 --help | Out-Null
+                  python tools/yt_dlp_auto_update.py --help | Out-Null
+                  python -m unittest discover -s tests -p 'test_*.py'
+                  if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+                  $oldExe = Join-Path $env:RUNNER_TEMP 'yt-dlp.exe'
+                  [System.IO.File]::WriteAllBytes($oldExe, [byte[]](0x4d, 0x5a, 0x00, 0x00))
+                  .\tools\migration\remove-standalone.ps1 --dry-run --path $oldExe | Out-Null
+                  if (-not (Test-Path -LiteralPath $oldExe)) { throw 'Dry-run deleted file.' }
+                  .\tools\migration\remove-standalone.ps1 --path $oldExe | Out-Null
+                  if (Test-Path -LiteralPath $oldExe) { throw 'Standalone exe was not removed.' }
