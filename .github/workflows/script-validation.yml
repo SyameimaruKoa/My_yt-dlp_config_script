@@ -76,6 +76,45 @@ jobs:
                   python tools/yt_dlp_auto_update.py --help | Out-Null
                   python -m unittest discover -s tests -p 'test_*.py'
                   if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Run FFmpeg helper via PowerShell with a mocked static-ffmpeg package
+              shell: powershell
+              run: |
+                  $mockRoot = Join-Path $env:RUNNER_TEMP 'ffmpeg mock package'
+                  $mockModule = Join-Path $mockRoot 'static_ffmpeg'
+                  $outputDir = Join-Path $env:RUNNER_TEMP 'ffmpeg output with spaces'
+                  New-Item -ItemType Directory -Path $mockModule -Force | Out-Null
+                  Set-Content -LiteralPath (Join-Path $mockModule '__init__.py') -Value '' -Encoding ASCII
+                  Set-Content -LiteralPath (Join-Path $mockModule 'run.py') -Value 'import os; get_or_fetch_platform_executables_else_raise = lambda: (os.environ["FFMPEG_TEST_SOURCE"], os.environ["FFPROBE_TEST_SOURCE"])' -Encoding ASCII
+                  $stub = @'
+                  using System;
+                  public static class FakeFfmpegTest {
+                      public static int Main(string[] args) {
+                          return args.Length == 1 && args[0] == "-version" ? 0 : 1;
+                      }
+                  }
+                  '@
+                  $fakeFfmpeg = Join-Path $mockRoot 'source ffmpeg.exe'
+                  $fakeFfprobe = Join-Path $mockRoot 'source ffprobe.exe'
+                  Add-Type -TypeDefinition $stub -OutputAssembly $fakeFfmpeg -OutputType ConsoleApplication
+                  Copy-Item -LiteralPath $fakeFfmpeg -Destination $fakeFfprobe
+                  $originalPythonPath = $env:PYTHONPATH
+                  try {
+                      $env:PYTHONPATH = $mockRoot
+                      $env:FFMPEG_TEST_SOURCE = $fakeFfmpeg
+                      $env:FFPROBE_TEST_SOURCE = $fakeFfprobe
+                      & python tools/install_ffmpeg.py $outputDir
+                      if ($LASTEXITCODE -ne 0) { throw 'PowerShell could not invoke FFmpeg helper.' }
+                      foreach ($name in @('ffmpeg.exe', 'ffprobe.exe')) {
+                          $executable = Join-Path $outputDir $name
+                          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Missing: $name" }
+                          & $executable -version
+                          if ($LASTEXITCODE -ne 0) { throw "Invalid installed executable: $name" }
+                      }
+                  }
+                  finally {
+                      $env:PYTHONPATH = $originalPythonPath
+                      Remove-Item Env:FFMPEG_TEST_SOURCE, Env:FFPROBE_TEST_SOURCE -ErrorAction SilentlyContinue
+                  }
             - name: Check Windows uninstall discovery and dry-run
               shell: powershell
               run: |
