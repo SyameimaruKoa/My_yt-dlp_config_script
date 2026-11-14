@@ -353,11 +353,15 @@ function Test-MpcBePresent {
 if (Test-MpcBePresent) {
     $MpcYtDlpExe = Join-Path $VenvDir 'Scripts\yt-dlp.exe'
     $MpcShimSource = Join-Path $PSScriptRoot 'tools\mpc_be_yt_dlp_shim.cs'
+    $MpcShimBuilder = Join-Path $PSScriptRoot 'tools\build_mpc_be_shim.ps1'
     if (-not (Test-Path -LiteralPath $MpcYtDlpExe -PathType Leaf)) {
         throw 'pip版yt-dlp.exeが見つからんぞ。'
     }
     if (-not (Test-Path -LiteralPath $MpcShimSource -PathType Leaf)) {
         throw 'MPC-BE用Shimのソースが見つからんぞ。'
+    }
+    if (-not (Test-Path -LiteralPath $MpcShimBuilder -PathType Leaf)) {
+        throw 'MPC-BE用Shimのビルドスクリプトが見つからんぞ。'
     }
     $MpcShimDirectory = Join-Path $RuntimeDir 'mpc-be'
     New-Item -ItemType Directory -Path $MpcShimDirectory -Force | Out-Null
@@ -365,7 +369,10 @@ if (Test-MpcBePresent) {
     $MpcShimConfig = Join-Path $MpcShimDirectory 'yt-dlp.shim'
     $TempExe = Join-Path $env:TEMP ("yt-dlp-mpcbe-" + [Guid]::NewGuid().ToString('N') + '.exe')
     try {
-        Add-Type -Path $MpcShimSource -OutputAssembly $TempExe -OutputType ConsoleApplication -ErrorAction Stop
+        & $MpcShimBuilder -Source $MpcShimSource -Output $TempExe
+        if (-not $?) {
+            throw 'MPC-BE用Shimのビルドに失敗したぞ。'
+        }
         Copy-Item -LiteralPath $TempExe -Destination $MpcShimExe -Force
     }
     finally {
