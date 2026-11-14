@@ -128,7 +128,7 @@ cleanup_legacy_runtime() {
     local target
 
     for old_directory in "$old_venv" "$old_prefix"; do
-        if [ -d "$old_directory" ] && [ ! -L "$old_directory" ]; then
+        if [ -d "$old_directory" ] || [ -L "$old_directory" ]; then
             if [ "$dry_run" = true ]; then
                 printf '旧実行環境全削除予定: %s\n' "$old_directory"
             else
