@@ -54,9 +54,9 @@ function Set-ManagedJunction {
         if (-not $Existing.PSIsContainer -or $Existing.LinkType) {
             throw "管理外のリンクまたはファイルは変更しないぞ: $Link"
         }
-        $Entries = @(Get-ChildItem -LiteralPath $Link -Force -Recurse -File)
+        $Entries = @(Get-ChildItem -LiteralPath $Link -Force)
         $Expected = if ($Kind -eq 'bin') { @('yt-dlp.cmd') } else { @('yt-dlp.exe', 'yt-dlp.shim') }
-        if (@($Entries | Where-Object { $_.Name -notin $Expected }).Count -gt 0) {
+        if (@($Entries | Where-Object { $_.PSIsContainer -or $_.LinkType -or $_.Name -notin $Expected }).Count -gt 0) {
             throw "管理外のファイルがあるので保持する: $Link"
         }
         if ($Kind -eq 'bin' -and $Entries.Count -gt 0) {
