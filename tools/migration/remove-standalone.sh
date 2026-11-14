@@ -184,6 +184,20 @@ cleanup_legacy_runtime() {
             printf '旧Proton Prefix削除完了: %s\n' "$old_prefix"
         fi
     fi
+    local old_checkout="$legacy_root/My_yt-dlp_config_script"
+    local active_checkout
+    active_checkout=$(readlink -f "$(dirname "$0")/../.." 2>/dev/null || true)
+    if [ -d "$old_checkout/.git" ] && [ ! -L "$old_checkout" ] &&
+       [ "$(readlink -f "$old_checkout")" != "$active_checkout" ] &&
+       [ "$(git -C "$old_checkout" remote get-url origin 2>/dev/null || true)" = "https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git" ] &&
+       [ -z "$(git -C "$old_checkout" status --porcelain --untracked-files=all 2>/dev/null)" ]; then
+        if [ "$dry_run" = true ]; then
+            printf '旧リポジトリの重複クローン削除予定: %s\\n' "$old_checkout"
+        else
+            rm -rf -- "$old_checkout"
+            printf '旧リポジトリの重複クローン削除完了: %s\\n' "$old_checkout"
+        fi
+    fi
     target=$(readlink -f "$HOME/.local/bin/deno" 2>/dev/null || true)
     if [ -f "$old_deno" ] && [ ! -L "$old_deno" ] &&
        [ "$target" != "$(readlink -f "$old_deno")" ]; then
