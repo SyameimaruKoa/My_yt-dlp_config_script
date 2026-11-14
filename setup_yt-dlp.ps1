@@ -91,7 +91,26 @@ function Set-ManagedConfigLink {
             Write-Output "設定リンク確認済み: $Link"
             return
         }
-        throw "管理外の設定リンクは変更しないぞ: $Link"
+        $GistId = '21141912fbacf40877f4cf877577e082'
+        $GistLocations = @(
+            (Join-Path $HOME $GistId),
+            (Join-Path $env:LOCALAPPDATA "yt-dlp\$GistId"),
+            (Join-Path $env:APPDATA "yt-dlp\$GistId")
+        )
+        $LegacyTargets = @()
+        foreach ($Location in $GistLocations) {
+            $LegacyTargets += (Join-Path $Location 'win yt-dlp config')
+            $LegacyTargets += (Join-Path $Location 'yt-dlp config')
+        }
+        if ($Existing.LinkType -eq 'SymbolicLink' -and
+            [string]$Existing.Target -in $LegacyTargets) {
+            [System.IO.File]::Delete($Link)
+            Write-Output "旧Gistの設定リンクを解除: $Link"
+            $Existing = $null
+        }
+        else {
+            throw "管理外の設定リンクは変更しないぞ: $Link"
+        }
     }
     if ($Existing) {
         if ($Existing.PSIsContainer) {
