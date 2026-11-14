@@ -144,6 +144,19 @@ if ($Config) {
         Write-Output "保持（変更済みの設定）: $ConfigLink"
     }
 }
+$LegacyBackup = Join-Path $Runtime 'legacy-config.backup'
+if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
+    if ($DryRun) {
+        Write-Output "元の設定を復元予定: $LegacyBackup -> $ConfigLink"
+    }
+    elseif (-not (Test-Path -LiteralPath $ConfigLink)) {
+        Move-Item -LiteralPath $LegacyBackup -Destination $ConfigLink
+        Write-Output "元の設定を復元したぞ: $ConfigLink"
+    }
+    else {
+        Write-Output "保持（復元先に別の設定が存在）: $LegacyBackup"
+    }
+}
 if (Test-Path -LiteralPath (Join-Path $LegacyVenv 'pyvenv.cfg')) {
     if ($DryRun) {
         Write-Output "旧venv削除予定: $LegacyVenv"
