@@ -212,29 +212,11 @@ else {
     if ($LASTEXITCODE -ne 0) {
         throw 'static-ffmpegのpipインストールに失敗したぞ。'
     }
-    $InstallFfmpeg = @'
-import os
-import shutil
-import subprocess
-import sys
-from pathlib import Path
-from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
-
-ffmpeg, ffprobe = get_or_fetch_platform_executables_else_raise()
-bin_dir = Path(sys.argv[1])
-bin_dir.mkdir(parents=True, exist_ok=True)
-for name, source in (("ffmpeg.exe", ffmpeg), ("ffprobe.exe", ffprobe)):
-    target = bin_dir / name
-    source = Path(source)
-    if target.exists():
-        target.unlink()
-    try:
-        os.link(source, target)
-    except OSError:
-        shutil.copy2(source, target)
-    subprocess.run([str(target), "-version"], check=True, stdout=subprocess.DEVNULL)
-'@
-    & $VenvPython -c $InstallFfmpeg $RuntimeBinDir
+    $InstallFfmpeg = Join-Path $PSScriptRoot 'tools\install_ffmpeg.py'
+    if (-not (Test-Path -LiteralPath $InstallFfmpeg -PathType Leaf)) {
+        throw "ffmpeg導入スクリプトが見つからん: $InstallFfmpeg"
+    }
+    & $VenvPython $InstallFfmpeg $RuntimeBinDir
     if ($LASTEXITCODE -ne 0) {
         throw 'リポジトリ内へのffmpeg・ffprobeの導入に失敗したぞ。'
     }
