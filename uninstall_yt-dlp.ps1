@@ -3,7 +3,7 @@
     yt-dlpのLinux/Windows共通リポジトリ管理方式からWindows環境をアンインストールする。
 .DESCRIPTION
     既定では現行・旧方式の実行環境、起動リンク、設定、Gistクローンを削除し、
-    Git作業ツリーも安全に削除できる場合は削除する。
+    Git作業ツリーもローカル変更・未送信コミットに関係なく削除する。
     --cleanup-onlyで旧方式のみ整理し、現行の仮想環境・設定・リンクを維持する。
     --dry-runですべての判定を表示し、削除は行わない。
 .EXAMPLE
@@ -95,7 +95,13 @@ function Remove-OwnedFile {
         Write-Output "削除予定: $Path"
     }
     else {
-        Remove-Item -LiteralPath $Path -Force
+        $Item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+        if ($Item -and $Item.LinkType -eq 'SymbolicLink') {
+            [System.IO.File]::Delete($Path)
+        }
+        else {
+            Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+        }
         Write-Output "削除完了: $Path"
     }
 }
@@ -107,51 +113,20 @@ function Remove-OwnedJunction {
         Write-Output "対象なし: $Link"
         return
     }
-    if ($Item.LinkType -eq 'Junction') {
-        if ([string]$Item.Target -ine $Expected) {
-            Write-Output "保持（管理外のジャンクション）: $Link"
-            return
-        }
-        if ($DryRun) {
-            Write-Output "ジャンクション削除予定: $Link"
-        }
-        else {
-            [System.IO.Directory]::Delete($Link)
-            Write-Output "ジャンクション削除完了: $Link"
-        }
-        return
-    }
-    if ($Item.LinkType -or -not $Item.PSIsContainer) {
-        Write-Output "保持（管理外のパス）: $Link"
-        return
-    }
-    $Files = @(Get-ChildItem -LiteralPath $Link -Force)
-    $Allowed = if ($Kind -eq 'bin') { @('yt-dlp.cmd') } else { @('yt-dlp.exe', 'yt-dlp.shim') }
-    if (@($Files | Where-Object { $_.PSIsContainer -or $_.LinkType -or $_.Name -notin $Allowed }).Count -gt 0) {
-        Write-Output "保持（管理外のファイルあり）: $Link"
-        return
-    }
-    if ($Kind -eq 'bin' -and $Files.Count -gt 0) {
-        $OldCmd = Join-Path $Link 'yt-dlp.cmd'
-        if (-not (Test-Path -LiteralPath $OldCmd) -or -not (Select-String -LiteralPath $OldCmd -SimpleMatch '%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe' -Quiet)) {
-            Write-Output "保持（管理外の起動スクリプト）: $Link"
-            return
-        }
-    }
-    if ($Kind -eq 'mpc' -and $Files.Count -gt 0) {
-        $OldShim = Join-Path $Link 'yt-dlp.shim'
-        if (-not (Test-Path -LiteralPath $OldShim) -or -not ((Get-Content -LiteralPath $OldShim -Raw) -match '--ignore-config')) {
-            Write-Output "保持（管理外のMPC-BEファイル）: $Link"
-            return
-        }
-    }
     if ($DryRun) {
-        Write-Output "旧方式ディレクトリ削除予定: $Link"
+        Write-Output "起動先削除予定（内容や変更の有無に関係なく）: $Link"
+        return
+    }
+    if ($Item.LinkType -eq 'Junction' -or ($Item.LinkType -eq 'SymbolicLink' -and $Item.PSIsContainer)) {
+        [System.IO.Directory]::Delete($Link)
+    }
+    elseif ($Item.LinkType -eq 'SymbolicLink') {
+        [System.IO.File]::Delete($Link)
     }
     else {
-        Remove-Item -LiteralPath $Link -Recurse -Force
-        Write-Output "旧方式ディレクトリ削除完了: $Link"
+        Remove-Item -LiteralPath $Link -Recurse -Force -ErrorAction Stop
     }
+    Write-Output "起動先削除完了: $Link"
 }
 #endregion
 
@@ -160,50 +135,22 @@ Remove-OwnedJunction -Link $BinLink -Expected (Join-Path $Runtime 'bin') -Kind '
 Remove-OwnedJunction -Link $MpcLink -Expected (Join-Path $Runtime 'mpc-be') -Kind 'mpc'
 
 $Config = Get-Item -LiteralPath $ConfigLink -Force -ErrorAction SilentlyContinue
-$GeneratedConfig = Join-Path $Root 'win yt-dlp config'
 if ($Config) {
-    if ($Config.LinkType) {
-        if ([string]$Config.Target -ieq $GeneratedConfig -or
-            ($Config.LinkType -eq 'HardLink' -and
-            (Test-Path -LiteralPath $GeneratedConfig) -and
-            ((Get-FileHash -LiteralPath $ConfigLink -Algorithm SHA256).Hash -eq
-             (Get-FileHash -LiteralPath $GeneratedConfig -Algorithm SHA256).Hash))) {
-            Remove-OwnedFile $ConfigLink
-        }
-        else {
-            Write-Output "保持（管理外の設定リンク）: $ConfigLink"
-        }
+    if ($DryRun) {
+        Write-Output "設定削除予定（変更の有無に関係なく）: $ConfigLink"
     }
-    elseif ((Test-Path -LiteralPath $GeneratedConfig) -and
-        ((Get-FileHash -LiteralPath $ConfigLink -Algorithm SHA256).Hash -eq
-         (Get-FileHash -LiteralPath $GeneratedConfig -Algorithm SHA256).Hash)) {
-        Remove-OwnedFile $ConfigLink
+    elseif ($Config.PSIsContainer -and -not $Config.LinkType) {
+        Remove-Item -LiteralPath $ConfigLink -Recurse -Force -ErrorAction Stop
+        Write-Output "設定削除完了: $ConfigLink"
     }
     else {
-        Write-Output "保持（変更済みの設定）: $ConfigLink"
+        Remove-OwnedFile $ConfigLink
     }
 }
 else {
     Write-Output "対象なし（設定）: $ConfigLink"
 }
 $PreserveRuntime = $false
-$LegacyBackup = Join-Path $Runtime 'legacy-config.backup'
-if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
-    if ($DryRun) {
-        Write-Output "元の設定を復元予定: $LegacyBackup -> $ConfigLink"
-    }
-    elseif (-not (Test-Path -LiteralPath $ConfigLink)) {
-        Move-Item -LiteralPath $LegacyBackup -Destination $ConfigLink
-        Write-Output "元の設定を復元したぞ: $ConfigLink"
-    }
-    else {
-        $PreserveRuntime = $true
-        Write-Output "保持（復元先に別の設定が存在し、旧設定を保存）: $LegacyBackup"
-    }
-}
-else {
-    Write-Output "対象なし（旧設定バックアップ）: $LegacyBackup"
-}
 if (Test-Path -LiteralPath (Join-Path $LegacyVenv 'pyvenv.cfg')) {
     if ($DryRun) {
         Write-Output "旧venv削除予定: $LegacyVenv"
@@ -306,63 +253,18 @@ if (-not $DryRun) {
     }
 }
 if ($RemoveRepository) {
-    if ($PreserveRuntime) {
-        Write-Output "リポジトリ保持（旧設定バックアップの復元が未完了）: $Root"
-    }
-    elseif (-not (Get-Command git -ErrorAction SilentlyContinue) -or
-        -not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
-        Write-Output "リポジトリ保持（Git管理情報が見つからない）: $Root"
+    if ($DryRun) {
+        Write-Output "現行リポジトリ全削除予定（編集・未送信コミットを含む）: $Root"
     }
     else {
-        $Origin = & git -C $Root remote get-url origin 2>$null
-        $Dirty = & git -C $Root status --porcelain --untracked-files=all 2>$null
-        $AllowedOrigins = @(
-            'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git',
-            'https://github.com/SyameimaruKoa/My_yt-dlp_config_script',
-            'git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git'
-        )
-        if (($LASTEXITCODE -ne 0) -or $Dirty -or $Origin -notin $AllowedOrigins) {
-            Write-Output "リポジトリ保持（管理外またはローカル変更あり）: $Root"
+        $CurrentLocation = (Get-Location).ProviderPath
+        $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+        if ($CurrentLocation -ieq $NormalizedRoot -or
+            $CurrentLocation.StartsWith($NormalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
         }
-        else {
-            $SelectedBranch = & git -C $Root branch --show-current 2>$null
-            if (-not $SelectedBranch) {
-                Write-Output "リポジトリ保持（detached HEADでブランチ未選択）: $Root"
-            }
-            else {
-            $PriorErrorAction = $ErrorActionPreference
-            $ErrorActionPreference = 'SilentlyContinue'
-            try {
-                & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
-                $UpstreamValid = $LASTEXITCODE -eq 0
-            }
-            finally {
-                $ErrorActionPreference = $PriorErrorAction
-            }
-            $Unpushed = if ($UpstreamValid) {
-                & git -C $Root rev-list --count '@{upstream}..HEAD' 2>$null
-            }
-            else {
-                'unknown'
-            }
-            if (-not $UpstreamValid -or $LASTEXITCODE -ne 0 -or $Unpushed -ne '0') {
-                Write-Output "リポジトリ保持（未送信コミットまたは追跡先不明）: $Root"
-            }
-            elseif ($DryRun) {
-                Write-Output "リポジトリ削除予定: $Root"
-            }
-            else {
-                $CurrentLocation = (Get-Location).ProviderPath
-                $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
-                if ($CurrentLocation -ieq $NormalizedRoot -or
-                    $CurrentLocation.StartsWith($NormalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
-                    Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
-                }
-                Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
-                Write-Output "リポジトリ削除完了: $Root"
-            }
-            }
-        }
+        Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
+        Write-Output "現行リポジトリ全削除完了: $Root"
     }
 }
 else {
