@@ -185,6 +185,11 @@ if [ "$dry_run" = false ]; then
 fi
 
 if [ "$remove_repository" = true ]; then
+    if [ "$ROOT" = "$HOME" ] || [ "$ROOT" = / ] ||
+       [ ! -f "$ROOT/setup_yt-dlp.sh" ] || [ ! -f "$ROOT/yt-dlp config" ]; then
+        printf '削除中止（実行元がyt-dlpリポジトリではない）: %s\n' "$ROOT" >&2
+        exit 1
+    fi
     if [ "$dry_run" = true ]; then
         printf '現行リポジトリ全削除予定（編集・未送信コミットを含む）: %s\n' "$ROOT"
     else
