@@ -66,6 +66,7 @@ function Remove-OwnedJunction {
     param([string]$Link, [string]$Expected, [string]$Kind)
     $Item = Get-Item -LiteralPath $Link -Force -ErrorAction SilentlyContinue
     if (-not $Item) {
+        Write-Output "対象なし: $Link"
         return
     }
     if ($Item.LinkType -eq 'Junction') {
@@ -144,6 +145,9 @@ if ($Config) {
         Write-Output "保持（変更済みの設定）: $ConfigLink"
     }
 }
+else {
+    Write-Output "対象なし（設定）: $ConfigLink"
+}
 $LegacyBackup = Join-Path $Runtime 'legacy-config.backup'
 if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
     if ($DryRun) {
@@ -157,6 +161,9 @@ if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
         Write-Output "保持（復元先に別の設定が存在）: $LegacyBackup"
     }
 }
+else {
+    Write-Output "対象なし（旧設定バックアップ）: $LegacyBackup"
+}
 if (Test-Path -LiteralPath (Join-Path $LegacyVenv 'pyvenv.cfg')) {
     if ($DryRun) {
         Write-Output "旧venv削除予定: $LegacyVenv"
@@ -166,12 +173,27 @@ if (Test-Path -LiteralPath (Join-Path $LegacyVenv 'pyvenv.cfg')) {
         Write-Output "旧venv削除完了: $LegacyVenv"
     }
 }
+elseif (Test-Path -LiteralPath $LegacyVenv) {
+    Write-Output "保持（yt-dlp用venvと判定できず）: $LegacyVenv"
+}
+else {
+    Write-Output "対象なし（旧venv）: $LegacyVenv"
+}
 if ((Test-Path -LiteralPath $LegacyUpdater -PathType Leaf) -and
     (Select-String -LiteralPath $LegacyUpdater -SimpleMatch 'yt-dlp-update.lock' -Quiet)) {
     Remove-OwnedFile $LegacyUpdater
 }
+elseif (Test-Path -LiteralPath $LegacyUpdater) {
+    Write-Output "保持（旧更新スクリプトと判定できず）: $LegacyUpdater"
+}
+else {
+    Write-Output "対象なし（旧更新スクリプト）: $LegacyUpdater"
+}
 if (Test-Path -LiteralPath $LegacyConverter -PathType Leaf) {
     Remove-OwnedFile $LegacyConverter
+}
+else {
+    Write-Output "対象なし（旧字幕変換ツール）: $LegacyConverter"
 }
 $UserBinPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $Parts = @($UserBinPath -split ';' | Where-Object { $_ -and $_ -ine $BinLink })
@@ -184,6 +206,9 @@ if (($UserBinPath -split ';') -icontains $BinLink) {
         Write-Output "ユーザーPATH登録削除完了: $BinLink"
     }
 }
+else {
+    Write-Output "対象なし（ユーザーPATH登録）: $BinLink"
+}
 $UserYtsc = [Environment]::GetEnvironmentVariable('YTSC_PATH', 'User')
 $ExpectedYtsc = Join-Path $Runtime 'tools\YTSubConverter\YTSubConverter.exe'
 if ($UserYtsc -ieq $ExpectedYtsc -or $UserYtsc -ieq $LegacyConverter) {
@@ -195,12 +220,21 @@ if ($UserYtsc -ieq $ExpectedYtsc -or $UserYtsc -ieq $LegacyConverter) {
         Write-Output 'YTSC_PATHを解除したぞ。'
     }
 }
+elseif ($UserYtsc) {
+    Write-Output "保持（管理外のYTSC_PATH）: $UserYtsc"
+}
+else {
+    Write-Output '対象なし（YTSC_PATH環境変数）'
+}
 #endregion
 
 #region リポジトリ内の実体
 $GeneratedConfig = Join-Path $Root 'win yt-dlp config'
 if (Test-Path -LiteralPath $GeneratedConfig -PathType Leaf) {
     Remove-OwnedFile $GeneratedConfig
+}
+else {
+    Write-Output "対象なし（生成設定ファイル）: $GeneratedConfig"
 }
 if (Test-Path -LiteralPath $Runtime -PathType Container) {
     if ($DryRun) {
@@ -210,6 +244,9 @@ if (Test-Path -LiteralPath $Runtime -PathType Container) {
         Remove-Item -LiteralPath $Runtime -Recurse -Force
         Write-Output "リポジトリ内の実行環境削除完了: $Runtime"
     }
+}
+else {
+    Write-Output "対象なし（リポジトリ内実行環境）: $Runtime"
 }
 if (-not $DryRun) {
     foreach ($Folder in @(
@@ -246,5 +283,38 @@ if ($RemoveRepository) {
     }
     }
 }
-Write-Output 'アンインストール処理が完了したぞ。'
+#region 残存するコマンドの検出
+Write-Output '--- PATH上のyt-dlpを確認 ---'
+$DetectedCommands = @(
+    Get-Command -Name 'yt-dlp', 'yt-dlp.exe', 'yt-dlp.cmd' -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandType -eq 'Application' -or $_.CommandType -eq 'ExternalScript' } |
+        Select-Object -ExpandProperty Source -Unique
+)
+if ($DetectedCommands.Count -eq 0) {
+    Write-Output 'PATH上にyt-dlpは見つからなかったぞ。'
+}
+else {
+    foreach ($CommandPath in $DetectedCommands) {
+        if (Test-Path -LiteralPath $CommandPath -PathType Leaf) {
+            Write-Output "PATH上に残るyt-dlp（管理対象外の可能性）: $CommandPath"
+        }
+        else {
+            Write-Output "PATH登録が残っているがファイルは存在しない: $CommandPath"
+        }
+    }
+}
+$LikelyStandalone = @(
+    (Join-Path $env:LOCALAPPDATA 'yt-dlp\yt-dlp.exe'),
+    (Join-Path $env:LOCALAPPDATA 'yt-dlp\bin\yt-dlp.exe'),
+    (Join-Path $env:APPDATA 'MPC-BE\yt-dlp\yt-dlp.exe')
+)
+foreach ($Candidate in $LikelyStandalone) {
+    if ((Test-Path -LiteralPath $Candidate -PathType Leaf) -and
+        $Candidate -notin $DetectedCommands) {
+        Write-Output "個別確認が必要なyt-dlp実行ファイル: $Candidate"
+    }
+}
+#endregion
+
+Write-Output 'アンインストール確認が完了したぞ。対象なしと表示された項目は削除しておらぬ。'
 #endregion
