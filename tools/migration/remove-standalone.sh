@@ -127,31 +127,22 @@ cleanup_legacy_runtime() {
     local old_deno="$HOME/.deno/bin/deno"
     local target
 
-    if [ -d "$old_venv" ] && [ ! -L "$old_venv" ] &&
-       [ -f "$old_venv/pyvenv.cfg" ] && [ -x "$old_venv/bin/python" ]; then
-        if [ "$dry_run" = true ]; then
-            printf '旧venv削除予定: %s\n' "$old_venv"
-        else
-            rm -rf -- "$old_venv"
-            printf '旧venv削除完了: %s\n' "$old_venv"
+    for old_directory in "$old_venv" "$old_prefix"; do
+        if [ -d "$old_directory" ] && [ ! -L "$old_directory" ]; then
+            if [ "$dry_run" = true ]; then
+                printf '旧実行環境全削除予定: %s\n' "$old_directory"
+            else
+                rm -rf -- "$old_directory"
+                printf '旧実行環境削除完了: %s\n' "$old_directory"
+            fi
         fi
-    fi
-    if [ -f "$old_updater" ] && [ ! -L "$old_updater" ] &&
-       grep -Fq 'yt-dlp-update.lock' "$old_updater"; then
+    done
+    if [ -e "$old_updater" ] || [ -L "$old_updater" ]; then
         if [ "$dry_run" = true ]; then
-            printf '旧更新スクリプト削除予定: %s\n' "$old_updater"
+            printf '旧更新スクリプト全削除予定: %s\n' "$old_updater"
         else
             rm -f -- "$old_updater"
             printf '旧更新スクリプト削除完了: %s\n' "$old_updater"
-        fi
-    fi
-    if [ -d "$old_prefix" ] && [ ! -L "$old_prefix" ] &&
-       { [ -f "$old_prefix/system.reg" ] || [ -f "$old_prefix/user.reg" ]; }; then
-        if [ "$dry_run" = true ]; then
-            printf '旧Proton Prefix削除予定: %s\n' "$old_prefix"
-        else
-            rm -rf -- "$old_prefix"
-            printf '旧Proton Prefix削除完了: %s\n' "$old_prefix"
         fi
     fi
     local old_checkout="$legacy_root/My_yt-dlp_config_script"
