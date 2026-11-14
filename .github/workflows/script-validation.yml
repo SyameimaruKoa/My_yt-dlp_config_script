@@ -75,7 +75,7 @@ jobs:
                       $env:APPDATA = Join-Path $env:RUNNER_TEMP 'yt-dlp-uninstall-test\roaming'
                       New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
                       $empty = @(.\z__uninstall_yt-dlp.ps1 --dry-run)
-                      if (-not ($empty -match '対象なし（旧venv）')) { throw 'Missing install is not reported.' }
+                      if (-not ($empty -match [regex]::Escape((-join @([char]0x5bfe, [char]0x8c61, [char]0x306a, [char]0x3057, [char]0xff08, [char]0x65e7, [char]0x76, [char]0x65, [char]0x6e, [char]0x76, [char]0xff09))))) { throw 'Missing install is not reported.' }
                       $venv = Join-Path $env:LOCALAPPDATA 'yt-dlp\venv'
                       New-Item -ItemType Directory -Path (Join-Path $venv 'Scripts') -Force | Out-Null
                       Set-Content -LiteralPath (Join-Path $venv 'pyvenv.cfg') -Value 'home = CI' -Encoding UTF8
@@ -83,7 +83,7 @@ jobs:
                       $updater = Join-Path $env:LOCALAPPDATA 'yt-dlp\auto_update.py'
                       Set-Content -LiteralPath $updater -Value 'yt-dlp-update.lock' -Encoding ASCII
                       $outputs = @(.\z__uninstall_yt-dlp.ps1 --dry-run)
-                      if (-not ($outputs -match '旧venv削除予定')) { throw 'Legacy venv was not found.' }
+                      if (-not ($outputs -match [regex]::Escape((-join @([char]0x65e7, [char]0x76, [char]0x65, [char]0x6e, [char]0x76, [char]0x524a, [char]0x9664, [char]0x4e88, [char]0x5b9a))))) { throw 'Legacy venv was not found.' }
                       if (-not ($outputs -match 'auto_update.py')) { throw 'Legacy updater was not found.' }
                       if (-not (Test-Path -LiteralPath $updater)) { throw 'Dry-run deleted the updater.' }
                       if (-not (Test-Path -LiteralPath (Join-Path $venv 'pyvenv.cfg'))) { throw 'Dry-run deleted venv.' }
