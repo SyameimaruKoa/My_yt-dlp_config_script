@@ -185,6 +185,10 @@ if ($UserYtsc -ieq $ExpectedYtsc -or $UserYtsc -ieq $LegacyConverter) {
 #endregion
 
 #region リポジトリ内の実体
+$GeneratedConfig = Join-Path $Root 'win yt-dlp config'
+if (Test-Path -LiteralPath $GeneratedConfig -PathType Leaf) {
+    Remove-OwnedFile $GeneratedConfig
+}
 if (Test-Path -LiteralPath $Runtime -PathType Container) {
     if ($DryRun) {
         Write-Output "リポジトリ内の実行環境削除予定: $Runtime"
