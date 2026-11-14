@@ -29,11 +29,90 @@ if ($args.Count -gt 0) {
 
 #region 初期化
 $ErrorActionPreference = 'Stop'
-$VenvDir = Join-Path $env:LOCALAPPDATA 'yt-dlp\venv'
+$RuntimeDir = Join-Path $PSScriptRoot '.runtime\windows'
+$VenvDir = Join-Path $RuntimeDir 'venv'
+$RuntimeBinDir = Join-Path $RuntimeDir 'bin'
 $BinDir = Join-Path $env:LOCALAPPDATA 'yt-dlp\bin'
 $ConfigDir = Join-Path $env:APPDATA 'yt-dlp'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
-New-Item -ItemType Directory -Path $BinDir, $ConfigDir -Force | Out-Null
+New-Item -ItemType Directory -Path $RuntimeBinDir, $ConfigDir -Force | Out-Null
+Write-Output "リポジトリ内の実体: $RuntimeDir"
+#endregion
+
+#region 外部パスをリポジトリ内へ接続
+function Set-ManagedJunction {
+    param([string]$Link, [string]$Target, [string]$Kind)
+    $Existing = Get-Item -LiteralPath $Link -Force -ErrorAction SilentlyContinue
+    if ($Existing -and $Existing.LinkType -eq 'Junction') {
+        if ([string]$Existing.Target -ieq $Target) {
+            Write-Output "リンク確認済み: $Link -> $Target"
+            return
+        }
+        throw "他のジャンクションは変更しないぞ: $Link"
+    }
+    if ($Existing) {
+        if (-not $Existing.PSIsContainer -or $Existing.LinkType) {
+            throw "管理外のリンクまたはファイルは変更しないぞ: $Link"
+        }
+        $Entries = @(Get-ChildItem -LiteralPath $Link -Force -Recurse -File)
+        $Expected = if ($Kind -eq 'bin') { @('yt-dlp.cmd') } else { @('yt-dlp.exe', 'yt-dlp.shim') }
+        if (@($Entries | Where-Object { $_.Name -notin $Expected }).Count -gt 0) {
+            throw "管理外のファイルがあるので保持する: $Link"
+        }
+        if ($Kind -eq 'bin' -and $Entries.Count -gt 0) {
+            if (-not (Select-String -LiteralPath (Join-Path $Link 'yt-dlp.cmd') -SimpleMatch '%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe' -Quiet)) {
+                throw "管理外の起動スクリプトなので保持する: $Link"
+            }
+        }
+        if ($Kind -eq 'mpc' -and $Entries.Count -gt 0) {
+            $OldConfig = Join-Path $Link 'yt-dlp.shim'
+            if (-not (Test-Path -LiteralPath $OldConfig) -or -not ((Get-Content -LiteralPath $OldConfig -Raw) -match '--ignore-config')) {
+                throw "管理外のMPC-BE用ファイルなので保持する: $Link"
+            }
+        }
+        Remove-Item -LiteralPath $Link -Recurse -Force
+    }
+    New-Item -ItemType Junction -Path $Link -Target $Target -Force | Out-Null
+    Write-Output "リポジトリ内へジャンクション設定: $Link -> $Target"
+}
+
+function Set-ManagedConfigLink {
+    param([string]$Link, [string]$Target)
+    $Existing = Get-Item -LiteralPath $Link -Force -ErrorAction SilentlyContinue
+    if ($Existing -and $Existing.LinkType) {
+        if ([string]$Existing.Target -ieq $Target) {
+            Write-Output "設定リンク確認済み: $Link"
+            return
+        }
+        throw "管理外の設定リンクは変更しないぞ: $Link"
+    }
+    if ($Existing) {
+        if ($Existing.PSIsContainer) {
+            throw "設定パスがディレクトリになっておる: $Link"
+        }
+        $OldHash = (Get-FileHash -LiteralPath $Link -Algorithm SHA256).Hash
+        $NewHash = (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash
+        if ($OldHash -ne $NewHash) {
+            $Backup = Join-Path $RuntimeDir 'legacy-config.backup'
+            if (Test-Path -LiteralPath $Backup) {
+                throw "既存の設定バックアップがあるため上書きしない: $Backup"
+            }
+            Move-Item -LiteralPath $Link -Destination $Backup
+            Write-Output "以前の設定を退避: $Backup"
+        }
+        else {
+            Remove-Item -LiteralPath $Link -Force
+        }
+    }
+    try {
+        New-Item -ItemType SymbolicLink -Path $Link -Target $Target -Force -ErrorAction Stop | Out-Null
+        Write-Output "設定をシンボリックリンク化: $Link -> $Target"
+    }
+    catch {
+        New-Item -ItemType HardLink -Path $Link -Target $Target -ErrorAction Stop | Out-Null
+        Write-Output "設定をハードリンク化: $Link -> $Target"
+    }
+}
 #endregion
 
 #region Python仮想環境
@@ -80,28 +159,28 @@ if ($LASTEXITCODE -ne 0) {
 
 #region PATHとyt-dlpコマンド
 $UpdaterSource = Join-Path $PSScriptRoot 'tools\yt_dlp_auto_update.py'
-$UpdaterTarget = Join-Path $env:LOCALAPPDATA 'yt-dlp\auto_update.py'
+$UpdaterTarget = $UpdaterSource
 if (-not (Test-Path -LiteralPath $UpdaterSource)) {
     throw '起動時の自動更新スクリプトが見つからんぞ。'
 }
-Copy-Item -LiteralPath $UpdaterSource -Destination $UpdaterTarget -Force
-$ShimPath = Join-Path $BinDir 'yt-dlp.cmd'
+$ShimPath = Join-Path $RuntimeBinDir 'yt-dlp.cmd'
 $ShimLines = @(
     '@echo off',
     'chcp 932 >nul',
-    'if not "%YT_DLP_SKIP_UPDATE%"=="1" if exist "%LOCALAPPDATA%\yt-dlp\auto_update.py" (',
-    '    "%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" "%LOCALAPPDATA%\yt-dlp\auto_update.py"',
+    ('if not "%YT_DLP_SKIP_UPDATE%"=="1" if exist "' + $UpdaterTarget + '" ('),
+    ('    "' + $VenvPython + '" "' + $UpdaterTarget + '"'),
     ')',
     'if "%~1"=="" goto help',
     'if /I "%~1"=="-h" goto help',
     'if /I "%~1"=="--help" goto help',
-    '"%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" -m yt_dlp %*',
+    ('"' + $VenvPython + '" -m yt_dlp %*'),
     'exit /b %errorlevel%',
     ':help',
-    '"%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe" -m yt_dlp --help',
+    ('"' + $VenvPython + '" -m yt_dlp --help'),
     'exit /b %errorlevel%'
 )
 [System.IO.File]::WriteAllLines($ShimPath, $ShimLines, [System.Text.Encoding]::GetEncoding(932))
+Set-ManagedJunction -Link $BinDir -Target $RuntimeBinDir -Kind 'bin'
 $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $PathParts = @($UserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 if ($PathParts -notcontains $BinDir) {
@@ -115,8 +194,7 @@ Write-Output "起動時のpip更新確認: $UpdaterTarget"
 #region ffmpeg・aria2・Deno
 $Tools = @(
     @{ Command = 'ffmpeg'; Package = 'Gyan.FFmpeg' },
-    @{ Command = 'aria2c'; Package = 'aria2.aria2' },
-    @{ Command = 'deno'; Package = 'DenoLand.Deno' }
+    @{ Command = 'aria2c'; Package = 'aria2.aria2' }
 )
 foreach ($Tool in $Tools) {
     if (Get-Command $Tool.Command -ErrorAction SilentlyContinue) {
@@ -135,7 +213,7 @@ foreach ($Tool in $Tools) {
 #endregion
 
 #region 字幕変換ツールと設定
-$ConverterDir = Join-Path $ConfigDir 'tools\YTSubConverter'
+$ConverterDir = Join-Path $RuntimeDir 'tools\YTSubConverter'
 New-Item -ItemType Directory -Path $ConverterDir -Force | Out-Null
 $ConverterPath = Join-Path $ConverterDir 'YTSubConverter.exe'
 $ConverterUrl = 'https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter.exe'
@@ -159,7 +237,7 @@ $GeneratedConfig = Join-Path $PSScriptRoot 'win yt-dlp config'
 if (-not (Test-Path -LiteralPath $GeneratedConfig)) {
     throw '変換済み設定ファイルが見つからんぞ。'
 }
-Copy-Item -LiteralPath $GeneratedConfig -Destination (Join-Path $ConfigDir 'config') -Force
+Set-ManagedConfigLink -Link (Join-Path $ConfigDir 'config') -Target $GeneratedConfig
 #endregion
 
 #region MPC-BE専用yt-dlp Shim
@@ -211,7 +289,7 @@ if (Test-MpcBePresent) {
     if (-not (Test-Path -LiteralPath $MpcShimSource -PathType Leaf)) {
         throw 'MPC-BE用Shimのソースが見つからんぞ。'
     }
-    $MpcShimDirectory = Join-Path $env:APPDATA 'MPC-BE\yt-dlp'
+    $MpcShimDirectory = Join-Path $RuntimeDir 'mpc-be'
     New-Item -ItemType Directory -Path $MpcShimDirectory -Force | Out-Null
     $MpcShimExe = Join-Path $MpcShimDirectory 'yt-dlp.exe'
     $MpcShimConfig = Join-Path $MpcShimDirectory 'yt-dlp.shim'
@@ -228,8 +306,52 @@ if (Test-MpcBePresent) {
         "$MpcYtDlpExe`n--ignore-config",
         [System.Text.Encoding]::UTF8
     )
-    Write-Output "MPC-BE専用yt-dlp: $MpcShimExe"
+    $MpcLink = Join-Path $env:APPDATA 'MPC-BE\yt-dlp'
+    Set-ManagedJunction -Link $MpcLink -Target $MpcShimDirectory -Kind 'mpc'
+    Write-Output "MPC-BE専用yt-dlp: $(Join-Path $MpcLink 'yt-dlp.exe')"
     Write-Output 'MPC-BEのyt-dlp実行可能ファイルには上記のパスを指定するのじゃ。'
+}
+#endregion
+
+#region Deno（リポジトリ内）
+$DenoDir = Join-Path $RuntimeDir 'tools\deno'
+$DenoExe = Join-Path $DenoDir 'deno.exe'
+if (-not (Test-Path -LiteralPath $DenoExe -PathType Leaf)) {
+    New-Item -ItemType Directory -Path $DenoDir -Force | Out-Null
+    $DenoZip = Join-Path $RuntimeDir 'deno-download.zip'
+    try {
+        Invoke-WebRequest -Uri 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' -OutFile $DenoZip -UseBasicParsing
+        Expand-Archive -LiteralPath $DenoZip -DestinationPath $DenoDir -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $DenoZip -Force -ErrorAction SilentlyContinue
+    }
+}
+if (-not (Test-Path -LiteralPath $DenoExe -PathType Leaf)) {
+    throw 'リポジトリ内へDenoをインストールできなかったぞ。'
+}
+Copy-Item -LiteralPath $DenoExe -Destination (Join-Path $RuntimeBinDir 'deno.exe') -Force
+Write-Output "Deno実体: $DenoExe"
+#endregion
+
+#region 旧方式の専用ファイルを整理
+$OldRoot = Join-Path $env:LOCALAPPDATA 'yt-dlp'
+$OldVenv = Join-Path $OldRoot 'venv'
+if ((Test-Path -LiteralPath (Join-Path $OldVenv 'pyvenv.cfg')) -and
+    (Test-Path -LiteralPath (Join-Path $OldVenv 'Scripts\yt-dlp.exe'))) {
+    Remove-Item -LiteralPath $OldVenv -Recurse -Force
+    Write-Output "旧venv削除: $OldVenv"
+}
+$OldUpdater = Join-Path $OldRoot 'auto_update.py'
+if ((Test-Path -LiteralPath $OldUpdater -PathType Leaf) -and
+    (Select-String -LiteralPath $OldUpdater -SimpleMatch 'yt-dlp-update.lock' -Quiet)) {
+    Remove-Item -LiteralPath $OldUpdater -Force
+    Write-Output "旧更新スクリプト削除: $OldUpdater"
+}
+$OldConverter = Join-Path $ConfigDir 'tools\YTSubConverter\YTSubConverter.exe'
+if (Test-Path -LiteralPath $OldConverter -PathType Leaf) {
+    Remove-Item -LiteralPath $OldConverter -Force
+    Write-Output "旧字幕変換ツール削除: $OldConverter"
 }
 #endregion
 
