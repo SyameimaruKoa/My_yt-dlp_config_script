@@ -112,7 +112,7 @@ Remove-Item Env:YT_DLP_SKIP_UPDATE
 
 Linuxセットアップ完了時に`tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime`を実行する。旧方式で配置した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`はリポジトリ内のpip仮想環境用ラッパーへのシンボリックリンクに置換される。旧venv・旧更新スクリプト・旧Proton Prefix・旧Deno本体を検出して整理し、新ラッパーは残すぞ。
 
-旧方式で設定ファイルを取得していた`~/21141912fbacf40877f4cf877577e082`は、Linux・Windows両方の旧Gistとして確認・整理する。Windowsでは`%USERPROFILE%`内に加えて、過去に利用したAppData配下も確認する。Gitクローンは取得元・変更・追加ファイル・未送信コミットを確認し、通常の旧Gist展開フォルダは既知のファイルだけで構成される場合に整理する。現在の設定への切り替え完了後に実行するぞ。旧venv・旧更新スクリプト・字幕変換ツール・旧MPC-BE Shimも整理対象じゃ。
+旧方式の`21141912fbacf40877f4cf877577e082`はLinuxのホーム、Windowsのユーザーフォルダ・AppData配下で確認する。対象の旧GistフォルダはGitの取得元・ローカル変更・未送信コミットに関係なく全削除する。Windowsでは旧venv・旧更新スクリプト・字幕変換ツール・旧MPC-BE Shimも、現行リンクを除いて整理する。
 
 削除対象を事前に確認する場合や、手動で再実行する場合は以下じゃ。
 
@@ -127,12 +127,12 @@ bash tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime
 
 **アンインストーラーはLinux・Windowsとも2モードじゃ。**
 
-- 引数なし：現行のvenv・設定・起動リンク・字幕変換ツール・旧Gistを含む、当リポジトリによるインストール成果物を削除する。取得元が正しく、未編集・未送信コミットなしのGit作業ツリーも既定で削除する
+- 引数なし：現行のvenv・設定・起動リンク・字幕変換ツール・旧Gistを含む、インストール成果物を全削除する。**現行リポジトリのローカル変更・未追跡ファイル・未送信コミットも削除**する
 - `--cleanup-only`：旧Gistと旧方式の残骸だけを削除。現行のvenv・設定・リンク・リポジトリは保持する（現行セットアップ完了後に使用）
 - `--dry-run`：削除予定と保持理由のみ表示。両モードで併用可能
 - `--keep-repository`：完全アンインストール時もGit作業ツリーは保持する
 
-編集・追加ファイル・未送信コミットがあるGitクローンは保持し、理由を表示する。
+旧Gistと現行リポジトリにある変更済みファイルも削除対象じゃ。
 
 **Linux**
 
@@ -153,6 +153,8 @@ bash uninstall_yt-dlp.sh --keep-repository
 .\uninstall_yt-dlp.ps1
 .\uninstall_yt-dlp.ps1 --keep-repository
 ```
+
+実行ファイル・venv・Deno・字幕変換ツールなど、専用の実体は`<リポジトリ>/.runtime/`に集約される。リポジトリのフォルダを直接削除しても専用の実体はなくなるが、OS側の起動リンク、設定リンク、PATH登録は残るため、完全削除にはアンインストーラーを使用する。
 
 他の用途でも使用するOS共用の依存パッケージ（ffmpeg・aria2・Git・Python・curlなど）は一括削除しない。過去のセットアップがインストールしたかどうかを特定できないためじゃ。リポジトリ内に導入した専用バイナリとvenvは削除対象じゃ。
 
