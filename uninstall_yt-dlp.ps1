@@ -325,8 +325,20 @@ if ($RemoveRepository) {
             Write-Output "リポジトリ保持（管理外またはローカル変更あり）: $Root"
         }
         else {
-            & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
-            $UpstreamValid = $LASTEXITCODE -eq 0
+            $SelectedBranch = & git -C $Root branch --show-current 2>$null
+            if (-not $SelectedBranch) {
+                Write-Output "リポジトリ保持（detached HEADでブランチ未選択）: $Root"
+            }
+            else {
+            $PriorErrorAction = $ErrorActionPreference
+            $ErrorActionPreference = 'SilentlyContinue'
+            try {
+                & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
+                $UpstreamValid = $LASTEXITCODE -eq 0
+            }
+            finally {
+                $ErrorActionPreference = $PriorErrorAction
+            }
             $Unpushed = if ($UpstreamValid) {
                 & git -C $Root rev-list --count '@{upstream}..HEAD' 2>$null
             }
@@ -348,6 +360,7 @@ if ($RemoveRepository) {
                 }
                 Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
                 Write-Output "リポジトリ削除完了: $Root"
+            }
             }
         }
     }
