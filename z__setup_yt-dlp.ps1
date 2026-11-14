@@ -35,7 +35,7 @@ $RuntimeBinDir = Join-Path $RuntimeDir 'bin'
 $BinDir = Join-Path $env:LOCALAPPDATA 'yt-dlp\bin'
 $ConfigDir = Join-Path $env:APPDATA 'yt-dlp'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
-New-Item -ItemType Directory -Path $RuntimeBinDir, $ConfigDir -Force | Out-Null
+New-Item -ItemType Directory -Path (Split-Path -Parent $BinDir), $RuntimeBinDir, $ConfigDir -Force | Out-Null
 Write-Output "リポジトリ内の実体: $RuntimeDir"
 #endregion
 
@@ -193,7 +193,7 @@ if ($PathParts -notcontains $BinDir) {
     [Environment]::SetEnvironmentVariable('Path', (($BinDir, $PathParts) -join ';'), 'User')
 }
 $env:Path = "$BinDir;$env:Path"
-Write-Output "yt-dlpコマンドを登録したぞ: $ShimPath"
+Write-Output "起動リンク: $(Join-Path $BinDir 'yt-dlp.cmd') -> $ShimPath"
 Write-Output "起動時のpip更新確認: $UpdaterTarget"
 #endregion
 
@@ -313,6 +313,7 @@ if (Test-MpcBePresent) {
         [System.Text.Encoding]::UTF8
     )
     $MpcLink = Join-Path $env:APPDATA 'MPC-BE\yt-dlp'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $MpcLink) -Force | Out-Null
     Set-ManagedJunction -Link $MpcLink -Target $MpcShimDirectory -Kind 'mpc'
     Write-Output "MPC-BE専用yt-dlp: $(Join-Path $MpcLink 'yt-dlp.exe')"
     Write-Output 'MPC-BEのyt-dlp実行可能ファイルには上記のパスを指定するのじゃ。'
