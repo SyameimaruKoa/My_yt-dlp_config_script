@@ -253,6 +253,14 @@ if (-not $DryRun) {
     }
 }
 if ($RemoveRepository) {
+    $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $NormalizedHome = [System.IO.Path]::GetFullPath($HOME).TrimEnd('\')
+    if ($NormalizedRoot -ieq $NormalizedHome -or
+        $NormalizedRoot -ieq [System.IO.Path]::GetPathRoot($NormalizedRoot).TrimEnd('\') -or
+        -not (Test-Path -LiteralPath (Join-Path $Root 'setup_yt-dlp.ps1') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $Root 'yt-dlp config') -PathType Leaf)) {
+        throw "削除中止（実行元がyt-dlpリポジトリではない）: $Root"
+    }
     if ($DryRun) {
         Write-Output "現行リポジトリ全削除予定（編集・未送信コミットを含む）: $Root"
     }
