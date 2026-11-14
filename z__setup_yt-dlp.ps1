@@ -80,6 +80,12 @@ function Set-ManagedConfigLink {
     param([string]$Link, [string]$Target)
     $Existing = Get-Item -LiteralPath $Link -Force -ErrorAction SilentlyContinue
     if ($Existing -and $Existing.LinkType) {
+        if ($Existing.LinkType -eq 'HardLink' -and
+            ((Get-FileHash -LiteralPath $Link -Algorithm SHA256).Hash -eq
+             (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash)) {
+            Write-Output "設定ハードリンク確認済み: $Link"
+            return
+        }
         if ([string]$Existing.Target -ieq $Target) {
             Write-Output "設定リンク確認済み: $Link"
             return
