@@ -27,6 +27,7 @@ show_help() {
 5. このGitHubリポジトリから設定ファイルと字幕変換スクリプトを取得
 6. Deno (JavaScriptランタイム) をインストール
 7. 各種シンボリックリンクを作成
+8. 移行前の不要なyt-dlp単独版・旧Gistクローンを整理
 
 オプション:
 -h, --help  このヘルプを表示するのじゃ
@@ -414,6 +415,16 @@ if [ -x "$HOME/.deno/bin/deno" ] && { [ ! -e "$LOCAL_BIN/deno" ] || [ -L "$LOCAL
     ln -s -f "$HOME/.deno/bin/deno" "$LOCAL_BIN/deno"
 fi
 echo "Deno のインストール処理完了じゃ。"
+echo "---"
+
+# --- 7. 旧方式の残骸を整理（新設定・仮想環境の導入に成功した後） ---
+CLEANUP_SCRIPT="$SOURCE_DIR/tools/migration/remove-standalone.sh"
+if [ -f "$CLEANUP_SCRIPT" ]; then
+    echo "旧方式の不要ファイルを確認中..."
+    if ! bash "$CLEANUP_SCRIPT" --legacy-gist; then
+        echo "警告: 旧方式のファイル整理に失敗したぞ。手動で確認するのじゃ。" >&2
+    fi
+fi
 echo "---"
 
 echo "全てのセットアップが完了したぞ。今度こそ完璧じゃ！"
