@@ -2,15 +2,16 @@
 .SYNOPSIS
     Windowsにyt-dlp Nightly、Python仮想環境、依存ツール、設定を導入するのじゃ。
 .DESCRIPTION
-    %LOCALAPPDATA%\yt-dlp\venv にPython仮想環境を作成し、pipでyt-dlpと追加依存関係を導入する。
-    yt-dlp.cmd をユーザーPATHに登録し、仮想環境を手動で有効化せずにyt-dlpを実行できるようにする。
-    wingetでffmpeg、aria2、Denoを準備し、YTSubConverterとWindows用設定ファイルも配置する。
+    リポジトリ内の.runtime\windows\venvにPython仮想環境を作成し、pipでyt-dlpと追加依存関係を導入する。
+    yt-dlp.cmdをユーザーPATHへ接続し、仮想環境を手動で有効化せずにyt-dlpを実行できるようにする。
+    ffmpeg・ffprobeが不足する場合のみ仮想環境のpipで導入する。aria2cは不足時に公式ZIPから導入する。
+    Deno、YTSubConverter、Windows設定もリポジトリ内に配置する。
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1
+    .\setup_yt-dlp.ps1
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1 -h
+    .\setup_yt-dlp.ps1 -h
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1 --help
+    .\setup_yt-dlp.ps1 --help
 .NOTES
     文字コード: UTF-8 BOM
 #>
@@ -197,24 +198,86 @@ Write-Output "起動リンク: $(Join-Path $BinDir 'yt-dlp.cmd') -> $ShimPath"
 Write-Output "起動時のpip更新確認: $UpdaterTarget"
 #endregion
 
-#region ffmpeg・aria2・Deno
-$Tools = @(
-    @{ Command = 'ffmpeg'; Package = 'Gyan.FFmpeg' },
-    @{ Command = 'aria2c'; Package = 'aria2.aria2' }
-)
-foreach ($Tool in $Tools) {
-    if (Get-Command $Tool.Command -ErrorAction SilentlyContinue) {
-        Write-Output "確認済み: $($Tool.Command)"
-        continue
-    }
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "wingetが見つからん。$($Tool.Command) を導入できんぞ。"
-    }
-    Write-Output "wingetで$($Tool.Package)をインストール中..."
-    & winget install --id $Tool.Package --exact --source winget --accept-package-agreements --accept-source-agreements
+#region ffmpeg・aria2（不足時のみリポジトリ内に導入）
+$env:Path = "$RuntimeBinDir;$env:Path"
+$SystemFfmpeg = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue
+$SystemFfprobe = Get-Command ffprobe -CommandType Application -ErrorAction SilentlyContinue
+if ($SystemFfmpeg -and $SystemFfprobe) {
+    Write-Output "既存のffmpegを使用: $($SystemFfmpeg.Source)"
+    Write-Output "既存のffprobeを使用: $($SystemFfprobe.Source)"
+}
+else {
+    Write-Output 'ffmpegまたはffprobeが見つからん。venv内にstatic-ffmpegをpipで導入するぞ。'
+    & $VenvPython -m pip install --disable-pip-version-check --upgrade static-ffmpeg
     if ($LASTEXITCODE -ne 0) {
-        throw "$($Tool.Package) のインストールに失敗したぞ。"
+        throw 'static-ffmpegのpipインストールに失敗したぞ。'
     }
+    $InstallFfmpeg = @'
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
+
+ffmpeg, ffprobe = get_or_fetch_platform_executables_else_raise()
+bin_dir = Path(sys.argv[1])
+bin_dir.mkdir(parents=True, exist_ok=True)
+for name, source in (("ffmpeg.exe", ffmpeg), ("ffprobe.exe", ffprobe)):
+    target = bin_dir / name
+    source = Path(source)
+    if target.exists():
+        target.unlink()
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+    subprocess.run([str(target), "-version"], check=True, stdout=subprocess.DEVNULL)
+'@
+    & $VenvPython -c $InstallFfmpeg $RuntimeBinDir
+    if ($LASTEXITCODE -ne 0) {
+        throw 'リポジトリ内へのffmpeg・ffprobeの導入に失敗したぞ。'
+    }
+    Write-Output "pip版ffmpeg・ffprobeを使用: $RuntimeBinDir"
+}
+if (Get-Command aria2c -CommandType Application -ErrorAction SilentlyContinue) {
+    Write-Output "既存のaria2cを使用: $((Get-Command aria2c -CommandType Application).Source)"
+}
+else {
+    Write-Output 'aria2cが見つからん。公式ZIPをリポジトリ内へ導入するぞ。'
+    $AriaArch = if ([Environment]::Is64BitOperatingSystem) { '64bit' } else { '32bit' }
+    $AriaHash = if ($AriaArch -eq '64bit') {
+        '67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288'
+    }
+    else {
+        '35f6514cc5dd7e98a87b3c4c2d25a0754b9b063dbe59bc0f22d483464f61e5b6'
+    }
+    $AriaUrl = "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-$AriaArch-build1.zip"
+    $AriaWork = Join-Path $RuntimeDir ('aria2-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $AriaWork -Force | Out-Null
+    try {
+        $AriaZip = Join-Path $AriaWork 'aria2.zip'
+        $AriaExtracted = Join-Path $AriaWork 'extracted'
+        Invoke-WebRequest -Uri $AriaUrl -OutFile $AriaZip -UseBasicParsing
+        if ((Get-FileHash -LiteralPath $AriaZip -Algorithm SHA256).Hash -ine $AriaHash) {
+            throw 'aria2c公式ZIPのSHA-256が一致せん。'
+        }
+        Expand-Archive -LiteralPath $AriaZip -DestinationPath $AriaExtracted
+        $AriaExe = Get-ChildItem -LiteralPath $AriaExtracted -Recurse -File -Filter 'aria2c.exe' |
+            Select-Object -First 1
+        if (-not $AriaExe) {
+            throw '公式ZIPにaria2c.exeが含まれておらん。'
+        }
+        Copy-Item -LiteralPath $AriaExe.FullName -Destination (Join-Path $RuntimeBinDir 'aria2c.exe') -Force
+    }
+    finally {
+        Remove-Item -LiteralPath $AriaWork -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    & (Join-Path $RuntimeBinDir 'aria2c.exe') --version | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'aria2cを起動できん。'
+    }
+    Write-Output "aria2cを配置したぞ: $(Join-Path $RuntimeBinDir 'aria2c.exe')"
 }
 #endregion
 
@@ -231,9 +294,9 @@ if (-not (Test-Path -LiteralPath $ConverterPath) -or (Get-Item -LiteralPath $Con
 [Environment]::SetEnvironmentVariable('YTSC_PATH', $ConverterPath, 'User')
 $env:YTSC_PATH = $ConverterPath
 
-$ConverterScript = Join-Path $PSScriptRoot 'z__convert_config.ps1'
+$ConverterScript = Join-Path $PSScriptRoot 'convert_config.ps1'
 if (-not (Test-Path -LiteralPath $ConverterScript)) {
-    throw 'z__convert_config.ps1 が見つからんぞ。'
+    throw 'convert_config.ps1 が見つからんぞ。'
 }
 & $ConverterScript
 if (-not $?) {

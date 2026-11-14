@@ -12,11 +12,15 @@ jobs:
             - name: Check Bash syntax and help
               shell: bash
               run: |
-                  bash -n z__setup_yt-dlp.sh z__uninstall_yt-dlp.sh z__run_sub_converter.sh
-                  bash z__uninstall_yt-dlp.sh --help
-                  bash z__uninstall_yt-dlp.sh --dry-run
-                  bash z__setup_yt-dlp.sh --help
-                  bash z__run_sub_converter.sh --help
+                  bash -n setup_yt-dlp.sh uninstall_yt-dlp.sh run_sub_converter.sh
+                  if find . -path ./.git -prune -o -type f -name 'z__*' -print | grep -q .; then
+                      echo 'Old z__ script filenames remain'
+                      exit 1
+                  fi
+                  bash uninstall_yt-dlp.sh --help
+                  bash uninstall_yt-dlp.sh --dry-run
+                  bash setup_yt-dlp.sh --help
+                  bash run_sub_converter.sh --help
                   bash -n tools/migration/remove-standalone.sh
                   bash tools/migration/remove-standalone.sh --help
                   python3 tools/yt_dlp_auto_update.py --help
@@ -53,18 +57,52 @@ jobs:
                       [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
                       if ($parseErrors.Count -gt 0) { throw "$($file.Name): $parseErrors" }
                   }
-                  .\z__setup_yt-dlp.ps1 --help | Out-Null
-                  .\z__uninstall_yt-dlp.ps1 --help | Out-Null
-                  .\z__uninstall_yt-dlp.ps1 --dry-run | Out-Null
-                  .\z__convert_config.ps1 --help | Out-Null
-                  .\z__run_sub_converter.ps1 -Help | Out-Null
-                  .\z__convert_config.ps1 | Out-Null
+                  .\setup_yt-dlp.ps1 --help | Out-Null
+                  $installer = Get-Content -LiteralPath 'setup_yt-dlp.ps1' -Raw -Encoding UTF8
+                  if ($installer -match 'winget') { throw 'Windows installer still depends on winget.' }
+                  if (-not $installer.Contains('static-ffmpeg')) { throw 'FFmpeg pip fallback is missing.' }
+                  if (-not $installer.Contains('Get-Command ffmpeg')) { throw 'Existing FFmpeg detection is missing.' }
+                  if (-not $installer.Contains('Get-Command ffprobe')) { throw 'Existing FFprobe detection is missing.' }
+                  if (-not $installer.Contains('Get-Command aria2c')) { throw 'Existing aria2 detection is missing.' }
+
+                  .\uninstall_yt-dlp.ps1 --help | Out-Null
+                  .\uninstall_yt-dlp.ps1 --dry-run | Out-Null
+                  .\convert_config.ps1 --help | Out-Null
+                  .\run_sub_converter.ps1 -Help | Out-Null
+                  .\convert_config.ps1 | Out-Null
                   $content = Get-Content -LiteralPath 'win yt-dlp config' -Raw -Encoding UTF8
                   $expected = '-P "temp:' + $env:TEMP + '"'
                   if (-not $content.Contains($expected)) { throw 'Windows temp path was not converted.' }
                   python tools/yt_dlp_auto_update.py --help | Out-Null
                   python -m unittest discover -s tests -p 'test_*.py'
                   if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Check Windows uninstall discovery and dry-run
+              shell: powershell
+              run: |
+                  $savedLocal = $env:LOCALAPPDATA
+                  $savedApp = $env:APPDATA
+                  try {
+                      $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'yt-dlp-uninstall-test\local'
+                      $env:APPDATA = Join-Path $env:RUNNER_TEMP 'yt-dlp-uninstall-test\roaming'
+                      New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
+                      $empty = @(.\uninstall_yt-dlp.ps1 --dry-run)
+                      if (-not ($empty -match [regex]::Escape((-join @([char]0x5bfe, [char]0x8c61, [char]0x306a, [char]0x3057, [char]0xff08, [char]0x65e7, [char]0x76, [char]0x65, [char]0x6e, [char]0x76, [char]0xff09))))) { throw 'Missing install is not reported.' }
+                      $venv = Join-Path $env:LOCALAPPDATA 'yt-dlp\venv'
+                      New-Item -ItemType Directory -Path (Join-Path $venv 'Scripts') -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $venv 'pyvenv.cfg') -Value 'home = CI' -Encoding UTF8
+                      Set-Content -LiteralPath (Join-Path $venv 'Scripts\yt-dlp.exe') -Value 'test' -Encoding ASCII
+                      $updater = Join-Path $env:LOCALAPPDATA 'yt-dlp\auto_update.py'
+                      Set-Content -LiteralPath $updater -Value 'yt-dlp-update.lock' -Encoding ASCII
+                      $outputs = @(.\uninstall_yt-dlp.ps1 --dry-run)
+                      if (-not ($outputs -match [regex]::Escape((-join @([char]0x65e7, [char]0x76, [char]0x65, [char]0x6e, [char]0x76, [char]0x524a, [char]0x9664, [char]0x4e88, [char]0x5b9a))))) { throw 'Legacy venv was not found.' }
+                      if (-not ($outputs -match 'auto_update.py')) { throw 'Legacy updater was not found.' }
+                      if (-not (Test-Path -LiteralPath $updater)) { throw 'Dry-run deleted the updater.' }
+                      if (-not (Test-Path -LiteralPath (Join-Path $venv 'pyvenv.cfg'))) { throw 'Dry-run deleted venv.' }
+                  }
+                  finally {
+                      $env:LOCALAPPDATA = $savedLocal
+                      $env:APPDATA = $savedApp
+                  }
             - name: Check MPC-BE dedicated exe shim
               shell: powershell
               run: |

@@ -5,8 +5,8 @@ set -euo pipefail
 
 show_help() {
     cat <<'EOF_HELP'
-使用法: bash z__uninstall_yt-dlp.sh [--dry-run] [--remove-repository]
-        bash z__uninstall_yt-dlp.sh -h | --help
+使用法: bash uninstall_yt-dlp.sh [--dry-run] [--remove-repository]
+        bash uninstall_yt-dlp.sh -h | --help
 
 このセットアップが作成したLinuxの起動リンク、設定リンク、字幕変換ツール、
 仮想環境、Deno、Proton Prefix、旧Gistクローンなどを整理する。
@@ -96,7 +96,16 @@ delete_link_if_owned "$LOCAL_BIN/wine" "$RUNTIME/bin/wine"
 delete_known_wrapper "$LOCAL_BIN/wine" wine
 delete_link_if_owned "$LOCAL_BIN/deno" "$RUNTIME/deno/bin/deno" "$HOME/.deno/bin/deno"
 delete_link_if_owned "$HOME/.config/yt-dlp/config" "$ROOT/yt-dlp config" "$LEGACY_GIST/yt-dlp config"
-delete_link_if_owned "$HOME/.config/yt-dlp/z__run_sub_converter.sh" "$ROOT/z__run_sub_converter.sh" "$LEGACY_GIST/z__run_sub_converter.sh"
+delete_link_if_owned "$HOME/.config/yt-dlp/run_sub_converter.sh" "$ROOT/run_sub_converter.sh" "$LEGACY_GIST/run_sub_converter.sh"
+legacy_converter_link="$HOME/.config/yt-dlp/z__run_sub_converter.sh"
+if [ -L "$legacy_converter_link" ]; then
+    case "$(readlink "$legacy_converter_link")" in
+        "$ROOT/z__run_sub_converter.sh"|"$LEGACY_GIST/z__run_sub_converter.sh")
+            delete_file "$legacy_converter_link"
+            ;;
+        *) printf '保持（管理外の旧字幕リンク）: %s\n' "$legacy_converter_link" ;;
+    esac
+fi
 
 converter="$HOME/.config/yt-dlp/tools/YTSubConverter/YTSubConverter.exe"
 delete_link_if_owned "$converter" "$RUNTIME/tools/YTSubConverter/YTSubConverter.exe"

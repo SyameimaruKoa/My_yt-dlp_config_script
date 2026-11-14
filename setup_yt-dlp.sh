@@ -3,8 +3,8 @@
 # yt-dlp (Nightly) と Windows版YTSubConverter.exe (UMU / Proton動作) をセットアップするのじゃ
 # Ubuntu / Debian と Bazzite に対応
 #
-# 使用法: ./z__setup_yt-dlp.sh
-# ヘルプ: ./z__setup_yt-dlp.sh -h
+# 使用法: ./setup_yt-dlp.sh
+# ヘルプ: ./setup_yt-dlp.sh -h
 
 set -e
 set -o pipefail
@@ -359,7 +359,7 @@ fi
 
 # --- リポジトリを確定（以後の生成物はこのディレクトリ内に配置） ---
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-if [ -f "$SCRIPT_DIR/yt-dlp config" ] && [ -f "$SCRIPT_DIR/z__run_sub_converter.sh" ]; then
+if [ -f "$SCRIPT_DIR/yt-dlp config" ] && [ -f "$SCRIPT_DIR/run_sub_converter.sh" ]; then
     SOURCE_DIR="$SCRIPT_DIR"
 else
     SOURCE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/My_yt-dlp_config_script"
@@ -472,9 +472,9 @@ echo "---"
 CONFIG_DIR="$HOME/.config/yt-dlp"
 
 LINK_CONFIG="$CONFIG_DIR/config"
-LINK_SCRIPT="$CONFIG_DIR/z__run_sub_converter.sh"
+LINK_SCRIPT="$CONFIG_DIR/run_sub_converter.sh"
 SOURCE_CONFIG="$SOURCE_DIR/yt-dlp config"
-SOURCE_SCRIPT="$SOURCE_DIR/z__run_sub_converter.sh"
+SOURCE_SCRIPT="$SOURCE_DIR/run_sub_converter.sh"
 UPDATER_SOURCE="$SOURCE_DIR/tools/yt_dlp_auto_update.py"
 if [ ! -f "$UPDATER_SOURCE" ]; then
     echo "エラー: 更新確認スクリプトが見つからん: $UPDATER_SOURCE" >&2
@@ -483,6 +483,15 @@ fi
 mkdir -p "$CONFIG_DIR"
 ln -s -f "$SOURCE_CONFIG" "$LINK_CONFIG"
 ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
+LEGACY_SCRIPT_LINK="$CONFIG_DIR/z__run_sub_converter.sh"
+if [ -L "$LEGACY_SCRIPT_LINK" ]; then
+    case "$(readlink "$LEGACY_SCRIPT_LINK")" in
+        "$SOURCE_DIR/z__run_sub_converter.sh"|"$HOME/21141912fbacf40877f4cf877577e082/z__run_sub_converter.sh")
+            rm -f -- "$LEGACY_SCRIPT_LINK"
+            echo "旧字幕変換リンク削除: $LEGACY_SCRIPT_LINK"
+            ;;
+    esac
+fi
 chmod +x "$SOURCE_SCRIPT"
 echo "設定ファイル: $LINK_CONFIG"
 echo "yt-dlp起動時の自動更新: $UPDATER_PATH"
