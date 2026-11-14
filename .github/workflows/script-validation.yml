@@ -198,6 +198,8 @@ jobs:
                   try {
                       New-Item -ItemType Directory -Path (Join-Path $source 'tools\migration') -Force | Out-Null
                       Copy-Item -LiteralPath 'uninstall_yt-dlp.ps1' -Destination $source
+                      Copy-Item -LiteralPath 'setup_yt-dlp.ps1' -Destination $source
+                      Copy-Item -LiteralPath 'yt-dlp config' -Destination $source
                       Copy-Item -LiteralPath 'tools\migration\cleanup-legacy.ps1' -Destination (Join-Path $source 'tools\migration')
                       Set-Content -LiteralPath (Join-Path $source '.gitignore') -Value '.runtime/' -Encoding ASCII
                       & git init --bare --initial-branch=main $remote | Out-Null
