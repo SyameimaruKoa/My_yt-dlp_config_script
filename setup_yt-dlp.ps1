@@ -387,23 +387,13 @@ Write-Output "Deno実体: $DenoExe"
 #endregion
 
 #region 旧方式の専用ファイルを整理
-$OldRoot = Join-Path $env:LOCALAPPDATA 'yt-dlp'
-$OldVenv = Join-Path $OldRoot 'venv'
-if ((Test-Path -LiteralPath (Join-Path $OldVenv 'pyvenv.cfg')) -and
-    (Test-Path -LiteralPath (Join-Path $OldVenv 'Scripts\yt-dlp.exe'))) {
-    Remove-Item -LiteralPath $OldVenv -Recurse -Force
-    Write-Output "旧venv削除: $OldVenv"
+$LegacyCleanup = Join-Path $PSScriptRoot 'tools\migration\cleanup-legacy.ps1'
+if (-not (Test-Path -LiteralPath $LegacyCleanup -PathType Leaf)) {
+    throw "旧方式の整理スクリプトが見つからん: $LegacyCleanup"
 }
-$OldUpdater = Join-Path $OldRoot 'auto_update.py'
-if ((Test-Path -LiteralPath $OldUpdater -PathType Leaf) -and
-    (Select-String -LiteralPath $OldUpdater -SimpleMatch 'yt-dlp-update.lock' -Quiet)) {
-    Remove-Item -LiteralPath $OldUpdater -Force
-    Write-Output "旧更新スクリプト削除: $OldUpdater"
-}
-$OldConverter = Join-Path $ConfigDir 'tools\YTSubConverter\YTSubConverter.exe'
-if (Test-Path -LiteralPath $OldConverter -PathType Leaf) {
-    Remove-Item -LiteralPath $OldConverter -Force
-    Write-Output "旧字幕変換ツール削除: $OldConverter"
+& $LegacyCleanup
+if (-not $?) {
+    throw '旧方式の整理処理に失敗したぞ。'
 }
 #endregion
 
