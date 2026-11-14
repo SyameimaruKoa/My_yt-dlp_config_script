@@ -84,7 +84,7 @@ class UninstallModesTests(unittest.TestCase):
                        capture_output=True)
         subprocess.run(["git", "-C", str(self.root), "init", "-b", "main"], check=True,
                        capture_output=True)
-        (self.root / ".gitignore").write_text(".runtime/\\n")
+        (self.root / ".gitignore").write_text(".runtime/\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True,
                        capture_output=True)
         subprocess.run(["git", "-C", str(self.root), "-c", "user.name=CI",
