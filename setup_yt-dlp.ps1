@@ -2,9 +2,10 @@
 .SYNOPSIS
     Windowsにyt-dlp Nightly、Python仮想環境、依存ツール、設定を導入するのじゃ。
 .DESCRIPTION
-    %LOCALAPPDATA%\yt-dlp\venv にPython仮想環境を作成し、pipでyt-dlpと追加依存関係を導入する。
-    yt-dlp.cmd をユーザーPATHに登録し、仮想環境を手動で有効化せずにyt-dlpを実行できるようにする。
-    wingetでffmpeg、aria2、Denoを準備し、YTSubConverterとWindows用設定ファイルも配置する。
+    リポジトリ内の.runtime\windows\venvにPython仮想環境を作成し、pipでyt-dlpと追加依存関係を導入する。
+    yt-dlp.cmdをユーザーPATHへ接続し、仮想環境を手動で有効化せずにyt-dlpを実行できるようにする。
+    ffmpeg・ffprobeが不足する場合のみ仮想環境のpipで導入する。aria2cは不足時に公式ZIPから導入する。
+    Deno、YTSubConverter、Windows設定もリポジトリ内に配置する。
 .EXAMPLE
     .\setup_yt-dlp.ps1
 .EXAMPLE
