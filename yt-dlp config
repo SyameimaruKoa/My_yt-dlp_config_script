@@ -109,23 +109,26 @@
 # --- Linux用 (Discord通知) ---
 --exec 'Koa_Discord_Message.sh yt-dlp実行完了-[%(id)q] チャンネル名→%(channel)q プレイリスト名→%(playlist)q プレイリストNo.%(playlist_index)q/%(n_entries)q\ %(autonumber)q タイトル→%(title)q ファイル情報→（長さ%(duration_string)q）,（サイズ%(filesize)q\ or\ %(filesize_approx)q）,（解像度%(resolution)q）,（%(fps)qFPS）,（ビットレート%(tbr)qKbps）,（%(release_date)q公開） 保存ファイル名→%(filename)q ─────'
 
-# --- Linux用 (字幕変換 / z__setup_yt-dlp.sh でリンク設定済み) ---
-# ~/.config/yt-dlp/z__run_sub_converter.sh にシンボリックリンクがある前提じゃ
---exec '~/.config/yt-dlp/z__run_sub_converter.sh %(filepath)q'
+# --- Linux用 (字幕変換 / setup_yt-dlp.sh でリンク設定済み) ---
+# ~/.config/yt-dlp/run_sub_converter.sh にシンボリックリンクがある前提じゃ
+--exec '~/.config/yt-dlp/run_sub_converter.sh %(filepath)q'
 
-# --- Windows用 (字幕変換 / z__convert_config.ps1 で有効化される) ---
-#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\z__run_sub_converter.ps1\" %(filepath)q"
+# --- Windows用 (字幕変換 / convert_config.ps1 で有効化される) ---
+#--exec after_move:"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%SCRIPT_DIR%\run_sub_converter.ps1\" %(filepath)q"
 
 # === 結合コンテナ(拡張子)指定 ===
 # ★重要★ VR動画をそのままのデータで欲しい時(C案を使う時)は、以下のコメントアウトを外すのじゃ！
 #--merge-output-format "webm/mp4/mkv"
 
 # === ダウンローダー ===
-# (aria2で高速ダウンロードするオプション)
-# (ダウンロード進捗が分からなくなります) ← --progress より aria2c 側の進捗表示が優先されるためじゃな
-# ダウンロード処理を、外部の高速ダウンローダー「aria2c」に任せるのじゃ
+# 通常のHTTP/FTP転送はaria2cを維持するのじゃ
+# aria2c側の進捗表示はyt-dlpの進捗表示より優先される
 --downloader aria2c
-# ↑の aria2c に渡す引数を指定。-x8 (最大接続数8), -s8 (並列ダウンロード数8), --retry-wait=1 (リトライ待機1秒) などで高速化を図るのじゃ
+# DASH/HLS形式はyt-dlp内蔵ダウンローダーでフラグメントを並列取得する
+# この指定は直リンクのHTTPS形式には効かないため、その場合は実測で比較するのじゃ
+--downloader "dash,m3u8:native"
+--concurrent-fragments 8
+# aria2cへの引数。-x8はサーバー当たりの最大接続数、-s8は分割数じゃ
 --downloader-args aria2c:"-x8 -s8 --retry-wait=1"
 
 
