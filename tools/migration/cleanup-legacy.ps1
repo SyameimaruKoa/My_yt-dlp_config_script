@@ -51,6 +51,9 @@ function Remove-LegacyPath {
         if ($Item.LinkType -eq 'Junction' -or ($Item.LinkType -eq 'SymbolicLink' -and $Item.PSIsContainer)) {
             [System.IO.Directory]::Delete($Path)
         }
+        elseif ($Item.LinkType -eq 'SymbolicLink') {
+            [System.IO.File]::Delete($Path)
+        }
         else {
             Remove-Item -LiteralPath $Path -Recurse -Force
         }
