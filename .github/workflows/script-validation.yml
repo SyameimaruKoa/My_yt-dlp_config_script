@@ -305,6 +305,7 @@ jobs:
                   $env:YT_DLP_SHIM_TEST_OUTPUT = $output
                   $env:YT_DLP_SKIP_UPDATE = '1'
                   $jpArgument = (-join @([char]0x65e5, [char]0x672c, [char]0x8a9e)) + ' name.mp4'
+                  $PSNativeCommandUseErrorActionPreference = $false
                   & $shimExe '--format=bv*+ba' $jpArgument '--output' 'C:\Video Files\%(title)s.%(ext)s'
                   if ($LASTEXITCODE -ne 17) { throw 'PowerShell 7 shim did not forward child exit code.' }
                   $actual = [System.IO.File]::ReadAllLines($output, [System.Text.Encoding]::UTF8)
