@@ -137,11 +137,14 @@ fi
 
 converter="$HOME/.config/yt-dlp/tools/YTSubConverter/YTSubConverter.exe"
 delete_link_if_owned "$converter" "$RUNTIME/tools/YTSubConverter/YTSubConverter.exe"
-if [ -f "$converter" ] && [ ! -L "$converter" ] &&
-   [ -f "$RUNTIME/tools/YTSubConverter/YTSubConverter.exe" ] &&
-   cmp -s "$converter" "$RUNTIME/tools/YTSubConverter/YTSubConverter.exe"; then
+if [ -e "$converter" ] && [ ! -L "$converter" ]; then
     delete_file "$converter"
 fi
+for legacy_file in "$HOME/.config/yt-dlp/config" "$HOME/.config/yt-dlp/run_sub_converter.sh"; do
+    if [ -f "$legacy_file" ] && [ ! -L "$legacy_file" ]; then
+        delete_file "$legacy_file"
+    fi
+done
 
 if [ -f "$MIGRATION" ]; then
     args=(--legacy-gist --legacy-runtime)
