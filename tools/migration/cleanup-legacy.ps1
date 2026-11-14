@@ -206,7 +206,7 @@ foreach ($GistDir in $GistCandidates) {
             continue
         }
         $Status = @(& git -C $GistDir status --porcelain --ignored --untracked-files=all 2>$null)
-        if ($LASTEXITCODE -ne 0 -or @($Status | Where-Object { $_ -and $_ -ne '!! win yt-dlp config' }).Count -gt 0) {
+        if ($LASTEXITCODE -ne 0 -or @($Status | Where-Object { $_ -and $_ -ne '!! win yt-dlp config' -and $_ -ne '!! "win yt-dlp config"' }).Count -gt 0) {
             Write-Output "旧Gist保持（編集・追加ファイルあり）: $GistDir"
             continue
         }
