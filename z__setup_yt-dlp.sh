@@ -310,6 +310,7 @@ setup_proton_wrapper() {
     {
         printf '#!/bin/bash\n# yt-dlp UMU Proton wrapper\n'
         printf 'DEFAULT_PROTON_DIR=%q\n' "$proton_dir"
+        printf 'DEFAULT_WINEPREFIX=%q\n' "$RUNTIME_DIR/proton-prefix"
         cat << 'EOF_PROTON'
 set -e
 show_help() {
@@ -330,7 +331,7 @@ if ! command -v umu-run > /dev/null 2>&1; then
     exit 1
 fi
 export GAMEID="umu-default"
-export WINEPREFIX="${YT_DLP_WINEPREFIX:-$RUNTIME_DIR/proton-prefix}"
+export WINEPREFIX="${YT_DLP_WINEPREFIX:-$DEFAULT_WINEPREFIX}"
 mkdir -p "$WINEPREFIX"
 if [ -n "${YT_DLP_PROTON_PATH:-}" ]; then
     export PROTONPATH="$YT_DLP_PROTON_PATH"
@@ -489,7 +490,8 @@ echo "---"
 
 # --- 6. Deno のインストール ---
 echo "Deno (JavaScriptランタイム) をインストールするのじゃ..."
-DENO_INSTALL="$RUNTIME_DIR/deno" curl -fsSL https://deno.land/install.sh | sh
+export DENO_INSTALL="$RUNTIME_DIR/deno"
+curl -fsSL https://deno.land/install.sh | sh
 if [ -x "$RUNTIME_DIR/deno/bin/deno" ]; then
     install_owned_link "$RUNTIME_DIR/deno/bin/deno" "$LOCAL_BIN/deno"
 else
