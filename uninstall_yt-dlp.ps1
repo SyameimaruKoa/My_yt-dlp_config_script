@@ -314,38 +314,46 @@ if ($RemoveRepository) {
         Write-Output "リポジトリ保持（Git管理情報が見つからない）: $Root"
     }
     else {
-    $Origin = & git -C $Root remote get-url origin 2>$null
-    $Dirty = & git -C $Root status --porcelain --untracked-files=all 2>$null
-    $AllowedOrigins = @(
-        'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git',
-        'https://github.com/SyameimaruKoa/My_yt-dlp_config_script',
-        'git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git'
-    )
-    if (($LASTEXITCODE -ne 0) -or $Dirty -or $Origin -notin $AllowedOrigins) {
-        Write-Output "リポジトリ保持（管理外またはローカル変更あり）: $Root"
-    }
-    else {
-        & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
-        $UpstreamValid = $LASTEXITCODE -eq 0
-        $Unpushed = if ($UpstreamValid) { & git -C $Root rev-list --count '@{upstream}..HEAD' 2>$null } else { 'unknown' }
-        if (-not $UpstreamValid -or $LASTEXITCODE -ne 0 -or $Unpushed -ne '0') {
-            Write-Output "リポジトリ保持（未送信コミットまたは追跡先不明）: $Root"
+        $Origin = & git -C $Root remote get-url origin 2>$null
+        $Dirty = & git -C $Root status --porcelain --untracked-files=all 2>$null
+        $AllowedOrigins = @(
+            'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git',
+            'https://github.com/SyameimaruKoa/My_yt-dlp_config_script',
+            'git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git'
+        )
+        if (($LASTEXITCODE -ne 0) -or $Dirty -or $Origin -notin $AllowedOrigins) {
+            Write-Output "リポジトリ保持（管理外またはローカル変更あり）: $Root"
         }
-        elseif ($DryRun) {
-        Write-Output "リポジトリ削除予定: $Root"
-    }
-    else {
-        $CurrentLocation = (Get-Location).ProviderPath
-        $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
-        if ($CurrentLocation -ieq $NormalizedRoot -or
-            $CurrentLocation.StartsWith($NormalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
-            Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
+        else {
+            & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
+            $UpstreamValid = $LASTEXITCODE -eq 0
+            $Unpushed = if ($UpstreamValid) {
+                & git -C $Root rev-list --count '@{upstream}..HEAD' 2>$null
+            }
+            else {
+                'unknown'
+            }
+            if (-not $UpstreamValid -or $LASTEXITCODE -ne 0 -or $Unpushed -ne '0') {
+                Write-Output "リポジトリ保持（未送信コミットまたは追跡先不明）: $Root"
+            }
+            elseif ($DryRun) {
+                Write-Output "リポジトリ削除予定: $Root"
+            }
+            else {
+                $CurrentLocation = (Get-Location).ProviderPath
+                $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+                if ($CurrentLocation -ieq $NormalizedRoot -or
+                    $CurrentLocation.StartsWith($NormalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                    Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
+                }
+                Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
+                Write-Output "リポジトリ削除完了: $Root"
+            }
         }
-        Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
-        Write-Output "リポジトリ削除完了: $Root"
-        }
     }
-    }
+}
+else {
+    Write-Output "リポジトリ保持（--keep-repository指定）: $Root"
 }
 #region 残存するコマンドの検出
 Write-Output '--- PATH上のyt-dlpを確認 ---'
