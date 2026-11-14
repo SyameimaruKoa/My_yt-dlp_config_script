@@ -127,7 +127,9 @@ cleanup_legacy_gist() {
         printf '旧Gist保持（変更状態を確認できない）: %s\n' "$gist_dir"
         return
     fi
-    if [ -n "$status" ]; then
+    # 旧Windows設定生成物はGistの.gitignoreに登録されており、削除対象に含める。
+    # その他の無視ファイル・未追跡ファイル・編集は保持する。
+    if [ -n "$status" ] && [ "$status" != '!! win yt-dlp config' ]; then
         printf '旧Gist保持（ローカルファイルに変更がある）: %s\n' "$gist_dir"
         return
     fi
