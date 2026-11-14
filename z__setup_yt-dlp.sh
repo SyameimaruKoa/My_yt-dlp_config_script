@@ -78,16 +78,16 @@ install_owned_link() {
     if [ -L "$target" ]; then
         canonical_target=$(readlink -f "$target" || true)
         if [ "$canonical_target" = "$canonical_source" ]; then
-            printf 'リンク確認済み（リポジトリ内）: %s -> %s\\n' "$target" "$source"
+            printf 'リンク確認済み（リポジトリ内）: %s -> %s\n' "$target" "$source"
             return
         fi
         if [ "$target" != "$LOCAL_BIN/deno" ] || [ "$(readlink "$target")" != "$HOME/.deno/bin/deno" ]; then
-            printf 'エラー: 他のシンボリックリンクを変更しない: %s\\n' "$target" >&2
+            printf 'エラー: 他のシンボリックリンクを変更しない: %s\n' "$target" >&2
             return 1
         fi
     elif [ -e "$target" ]; then
         if [ ! -f "$target" ]; then
-            printf 'エラー: 通常ファイル以外を置き換えない: %s\\n' "$target" >&2
+            printf 'エラー: 通常ファイル以外を置き換えない: %s\n' "$target" >&2
             return 1
         fi
         kind=$(basename "$target")
@@ -105,7 +105,7 @@ except (OSError, zipfile.BadZipFile):
     sys.exit(1)
 PY_STANDALONE
                 then
-                    printf 'エラー: 管理外のyt-dlpを変更しない: %s\\n' "$target" >&2
+                    printf 'エラー: 管理外のyt-dlpを変更しない: %s\n' "$target" >&2
                     return 1
                 fi
                 ;;
@@ -113,12 +113,12 @@ PY_STANDALONE
                 if ! grep -Fq '# yt-dlp UMU Proton wrapper' "$target" &&
                    ! grep -Fq '# yt-dlp Proton wrapper' "$target" &&
                    ! grep -Fq 'distrobox enter -n yt-dlp-wine' "$target"; then
-                    printf 'エラー: 管理外のwineを変更しない: %s\\n' "$target" >&2
+                    printf 'エラー: 管理外のwineを変更しない: %s\n' "$target" >&2
                     return 1
                 fi
                 ;;
             *)
-                printf 'エラー: 管理外のファイルを変更しない: %s\\n' "$target" >&2
+                printf 'エラー: 管理外のファイルを変更しない: %s\n' "$target" >&2
                 return 1
                 ;;
         esac
@@ -128,7 +128,7 @@ PY_STANDALONE
     else
         ln -sfn -- "$source" "$target"
     fi
-    printf 'リポジトリ内へリンク設定: %s -> %s\\n' "$target" "$source"
+    printf 'リポジトリ内へリンク設定: %s -> %s\n' "$target" "$source"
 }
 
 download_file() {
