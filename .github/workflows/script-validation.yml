@@ -313,3 +313,4 @@ jobs:
                   if ([string]::Join('|', $actual) -cne [string]::Join('|', $expected)) {
                       throw ("PowerShell 7 shim arguments differ: " + [string]::Join('|', $actual))
                   }
+                  exit 0
