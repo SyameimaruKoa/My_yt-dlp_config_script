@@ -70,7 +70,7 @@ MPC-BE側の「実行可能ファイル」には`%APPDATA%\MPC-BE\yt-dlp\yt-dlp.
 | OS | 保存先 | `yt-dlp`の起動方法 |
 | --- | --- | --- |
 | Linux | `<リポジトリ>/.runtime/linux/venv` | `~/.local/bin/yt-dlp`（Ubuntu/Debianでは`/usr/local/bin/yt-dlp`もリンク） |
-| Windows | `<リポジトリ>/.runtime/windows/venv` | `%LOCALAPPDATA%\\yt-dlp\\bin\\yt-dlp.cmd`（ジャンクション経由） |
+| Windows | `<リポジトリ>/.runtime/windows/venv` | `%LOCALAPPDATA%\yt-dlp\bin\yt-dlp.cmd`（ジャンクション経由） |
 
 通常の `yt-dlp` コマンドが仮想環境のPythonを直接呼び出すため、`activate`は不要じゃ。システム全体のpip環境にはインストールしないぞ。`.runtime/`はGitの管理対象外じゃ。OS共用の依存パッケージ（apt / brew / winget）はシステム側へ配置される。
 
