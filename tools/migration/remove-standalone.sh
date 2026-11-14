@@ -192,10 +192,10 @@ cleanup_legacy_runtime() {
        [ "$(git -C "$old_checkout" remote get-url origin 2>/dev/null || true)" = "https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git" ] &&
        [ -z "$(git -C "$old_checkout" status --porcelain --untracked-files=all 2>/dev/null)" ]; then
         if [ "$dry_run" = true ]; then
-            printf '旧リポジトリの重複クローン削除予定: %s\\n' "$old_checkout"
+            printf '旧リポジトリの重複クローン削除予定: %s\n' "$old_checkout"
         else
             rm -rf -- "$old_checkout"
-            printf '旧リポジトリの重複クローン削除完了: %s\\n' "$old_checkout"
+            printf '旧リポジトリの重複クローン削除完了: %s\n' "$old_checkout"
         fi
     fi
     target=$(readlink -f "$HOME/.local/bin/deno" 2>/dev/null || true)
