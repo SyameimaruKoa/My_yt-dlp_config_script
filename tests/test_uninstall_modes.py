@@ -77,6 +77,31 @@ class UninstallModesTests(unittest.TestCase):
         self.assertFalse((self.home / ".local" / "bin" / "yt-dlp").exists())
         self.assertTrue(self.root.exists())
 
+    @unittest.skipUnless(shutil.which("git"), "Git is required")
+    def test_default_full_uninstall_removes_clean_published_checkout(self):
+        remote = pathlib.Path(self.temp.name) / "origin.git"
+        subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True,
+                       capture_output=True)
+        subprocess.run(["git", "-C", str(self.root), "init", "-b", "main"], check=True,
+                       capture_output=True)
+        (self.root / ".gitignore").write_text(".runtime/\\n")
+        subprocess.run(["git", "-C", str(self.root), "add", "."], check=True,
+                       capture_output=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid", "commit", "-m", "initial"],
+                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.root), "remote", "add", "origin", str(remote)],
+                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.root), "push", "-u", "origin", "main"],
+                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.root), "remote", "set-url", "origin",
+                        "https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git"],
+                       check=True, capture_output=True)
+        output = self.call().stdout
+        self.assertIn("リポジトリ削除完了", output)
+        self.assertFalse(self.root.exists())
+
+
 
 if __name__ == "__main__":
     unittest.main()
