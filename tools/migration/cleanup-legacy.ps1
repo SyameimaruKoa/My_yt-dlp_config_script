@@ -67,6 +67,25 @@ function Test-PlainDirectory {
     return ($null -ne $Item -and $Item.PSIsContainer -and -not $Item.LinkType)
 }
 
+function Invoke-LegacyGit {
+    param([string]$Directory, [string[]]$Arguments)
+    $PriorErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    $Lines = @()
+    $ExitCode = 1
+    try {
+        $Lines = @(& git -C $Directory @Arguments 2>$null)
+        $ExitCode = $LASTEXITCODE
+    }
+    catch {
+        $Lines = @()
+    }
+    finally {
+        $ErrorActionPreference = $PriorErrorAction
+    }
+    return [pscustomobject]@{ Lines = $Lines; ExitCode = $ExitCode }
+}
+
 function Remove-EmptyLegacyParents {
     param([string[]]$Paths)
     if ($DryRun) { return }
@@ -193,30 +212,36 @@ foreach ($GistDir in $GistCandidates) {
             Write-Output "旧Gist保持（gitが見つからない）: $GistDir"
             continue
         }
-        $Origin = (& git -C $GistDir remote get-url origin 2>$null)
-        $RootPath = (& git -C $GistDir rev-parse --show-toplevel 2>$null)
+        $RemoteResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('remote', 'get-url', 'origin')
+        $RootResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-parse', '--show-toplevel')
+        $Origin = [string]($RemoteResult.Lines | Select-Object -First 1)
+        $RootPath = [string]($RootResult.Lines | Select-Object -First 1)
         $AllowedRemotes = @(
             "https://gist.github.com/$GistId.git",
             "https://gist.github.com/$GistId",
             "git@gist.github.com:$GistId.git"
         )
-        if ($LASTEXITCODE -ne 0 -or $Origin -notin $AllowedRemotes -or
+        if ($RemoteResult.ExitCode -ne 0 -or $RootResult.ExitCode -ne 0 -or
+            $Origin -notin $AllowedRemotes -or
             [IO.Path]::GetFullPath($RootPath).TrimEnd('\') -ine [IO.Path]::GetFullPath($GistDir).TrimEnd('\')) {
             Write-Output "旧Gist保持（取得元が違う）: $GistDir"
             continue
         }
-        $Status = @(& git -C $GistDir status --porcelain --ignored --untracked-files=all 2>$null)
-        if ($LASTEXITCODE -ne 0 -or @($Status | Where-Object { $_ -and $_ -ne '!! win yt-dlp config' -and $_ -ne '!! "win yt-dlp config"' }).Count -gt 0) {
+        $StatusResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('status', '--porcelain', '--ignored', '--untracked-files=all')
+        $Status = @($StatusResult.Lines)
+        if ($StatusResult.ExitCode -ne 0 -or
+            @($Status | Where-Object { $_ -and $_ -ne '!! win yt-dlp config' -and $_ -ne '!! "win yt-dlp config"' }).Count -gt 0) {
             Write-Output "旧Gist保持（編集・追加ファイルあり）: $GistDir"
             continue
         }
-        & git -C $GistDir rev-parse --verify '@{upstream}' 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) {
+        $UpstreamResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-parse', '--verify', '@{upstream}')
+        if ($UpstreamResult.ExitCode -ne 0) {
             Write-Output "旧Gist保持（追跡先不明）: $GistDir"
             continue
         }
-        $Ahead = & git -C $GistDir rev-list --count '@{upstream}..HEAD' 2>$null
-        if ($LASTEXITCODE -ne 0 -or $Ahead -ne '0') {
+        $AheadResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-list', '--count', '@{upstream}..HEAD')
+        $Ahead = [string]($AheadResult.Lines | Select-Object -First 1)
+        if ($AheadResult.ExitCode -ne 0 -or $Ahead -ne '0') {
             Write-Output "旧Gist保持（未送信コミットあり）: $GistDir"
             continue
         }
