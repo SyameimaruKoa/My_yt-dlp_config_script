@@ -3,8 +3,8 @@
 # yt-dlp (Nightly) と Windows版YTSubConverter.exe (UMU / Proton動作) をセットアップするのじゃ
 # Ubuntu / Debian と Bazzite に対応
 #
-# 使用法: ./z__setup_yt-dlp.sh
-# ヘルプ: ./z__setup_yt-dlp.sh -h
+# 使用法: ./setup_yt-dlp.sh
+# ヘルプ: ./setup_yt-dlp.sh -h
 
 set -e
 set -o pipefail
@@ -19,14 +19,15 @@ show_help() {
 1. 必須パッケージ (git, ffmpeg, python3, curl, wget, aria2) の準備
    Ubuntu / Debian: apt-get
    Bazzite: Homebrew (OS本体の変更・再起動なし)
-2. yt-dlp の最新 Nightly ビルドをインストール
+2. Python仮想環境にyt-dlp Nightlyとpip追加依存関係をインストール
 3. YTSubConverter.exe をダウンロードして配置
 4. UMU Launcher でProtonを利用 (Wine/Monoの手動インストール不要)
    Bazzite: インストール済みProtonを優先
    Ubuntu / Debian: Steam不要のUMU-Protonを自動取得
-5. Gist から設定ファイルと字幕変換スクリプトを取得
+5. このGitHubリポジトリから設定ファイルと字幕変換スクリプトを取得
 6. Deno (JavaScriptランタイム) をインストール
-7. 各種シンボリックリンクを作成
+7. 起動ラッパー・設定・変換ツールの参照先をリポジトリ内に統一
+8. 移行前の不要なファイル・旧Gistクローンを整理
 
 オプション:
 -h, --help  このヘルプを表示するのじゃ
@@ -62,6 +63,73 @@ fi
 LOCAL_BIN="$HOME/.local/bin"
 mkdir -p "$LOCAL_BIN"
 export PATH="$LOCAL_BIN:$PATH"
+
+# 新しいターミナルでも ~/.local/bin を先頭で検索する
+for startup_file in "$HOME/.profile" "$HOME/.bashrc"; do
+    if ! grep -Fq '# yt-dlp local bin path' "$startup_file" 2>/dev/null; then
+        printf '\n# yt-dlp local bin path\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$startup_file"
+    fi
+done
+
+install_owned_link() {
+    local source="$1" target="$2" elevate="${3:-false}" kind
+    local canonical_source canonical_target
+    canonical_source=$(readlink -f "$source")
+    if [ -L "$target" ]; then
+        canonical_target=$(readlink -f "$target" || true)
+        if [ "$canonical_target" = "$canonical_source" ]; then
+            printf 'リンク確認済み（リポジトリ内）: %s -> %s\n' "$target" "$source"
+            return
+        fi
+        if [ "$target" != "$LOCAL_BIN/deno" ] || [ "$(readlink "$target")" != "$HOME/.deno/bin/deno" ]; then
+            printf 'エラー: 他のシンボリックリンクを変更しない: %s\n' "$target" >&2
+            return 1
+        fi
+    elif [ -e "$target" ]; then
+        if [ ! -f "$target" ]; then
+            printf 'エラー: 通常ファイル以外を置き換えない: %s\n' "$target" >&2
+            return 1
+        fi
+        kind=$(basename "$target")
+        case "$kind" in
+            yt-dlp)
+                if ! grep -Fq '# yt-dlp venv wrapper' "$target" 2>/dev/null &&
+                   ! python3 - "$target" <<'PY_STANDALONE'
+import sys
+import zipfile
+try:
+    with zipfile.ZipFile(sys.argv[1]) as archive:
+        names = set(archive.namelist())
+    sys.exit(0 if {'yt_dlp/__main__.py', 'yt_dlp/version.py'} <= names else 1)
+except (OSError, zipfile.BadZipFile):
+    sys.exit(1)
+PY_STANDALONE
+                then
+                    printf 'エラー: 管理外のyt-dlpを変更しない: %s\n' "$target" >&2
+                    return 1
+                fi
+                ;;
+            wine)
+                if ! grep -Fq '# yt-dlp UMU Proton wrapper' "$target" &&
+                   ! grep -Fq '# yt-dlp Proton wrapper' "$target" &&
+                   ! grep -Fq 'distrobox enter -n yt-dlp-wine' "$target"; then
+                    printf 'エラー: 管理外のwineを変更しない: %s\n' "$target" >&2
+                    return 1
+                fi
+                ;;
+            *)
+                printf 'エラー: 管理外のファイルを変更しない: %s\n' "$target" >&2
+                return 1
+                ;;
+        esac
+    fi
+    if [ "$elevate" = true ]; then
+        sudo ln -sfn -- "$source" "$target"
+    else
+        ln -sfn -- "$source" "$target"
+    fi
+    printf 'リポジトリ内へリンク設定: %s -> %s\n' "$target" "$source"
+}
 
 download_file() {
     local url="$1"
@@ -175,7 +243,7 @@ install_umu() {
 }
 
 setup_proton_wrapper() {
-    local wine_wrapper="$LOCAL_BIN/wine"
+    local wine_wrapper="$RUNTIME_DIR/bin/wine"
     local root candidate library_dir proton_script="" proton_dir=""
     local -a steam_roots=()
     local -a proton_candidates=()
@@ -242,6 +310,7 @@ setup_proton_wrapper() {
     {
         printf '#!/bin/bash\n# yt-dlp UMU Proton wrapper\n'
         printf 'DEFAULT_PROTON_DIR=%q\n' "$proton_dir"
+        printf 'DEFAULT_WINEPREFIX=%q\n' "$RUNTIME_DIR/proton-prefix"
         cat << 'EOF_PROTON'
 set -e
 show_help() {
@@ -262,7 +331,7 @@ if ! command -v umu-run > /dev/null 2>&1; then
     exit 1
 fi
 export GAMEID="umu-default"
-export WINEPREFIX="${YT_DLP_WINEPREFIX:-${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/proton-prefix}"
+export WINEPREFIX="${YT_DLP_WINEPREFIX:-$DEFAULT_WINEPREFIX}"
 mkdir -p "$WINEPREFIX"
 if [ -n "${YT_DLP_PROTON_PATH:-}" ]; then
     export PROTONPATH="$YT_DLP_PROTON_PATH"
@@ -273,6 +342,7 @@ exec umu-run "$@"
 EOF_PROTON
     } > "$wine_wrapper"
     chmod +x "$wine_wrapper"
+    install_owned_link "$wine_wrapper" "$LOCAL_BIN/wine"
     echo "UMU / Protonラッパーを配置したぞ: $wine_wrapper"
 }
 
@@ -284,8 +354,31 @@ if [ "$OS_TYPE" = "bazzite" ]; then
 else
     echo "システムパッケージを確認・インストール中 (sudoパスワードを入れるのじゃ)..."
     sudo apt-get update
-    sudo apt-get install -y ffmpeg git python3 curl wget aria2 ca-certificates
+    sudo apt-get install -y ffmpeg git python3 python3-venv curl wget aria2 ca-certificates
 fi
+
+# --- リポジトリを確定（以後の生成物はこのディレクトリ内に配置） ---
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+if [ -f "$SCRIPT_DIR/yt-dlp config" ] && [ -f "$SCRIPT_DIR/run_sub_converter.sh" ]; then
+    SOURCE_DIR="$SCRIPT_DIR"
+else
+    SOURCE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp/My_yt-dlp_config_script"
+    REPO_URL="https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git"
+    if [ -d "$SOURCE_DIR/.git" ]; then
+        git -C "$SOURCE_DIR" pull --ff-only
+    elif [ -e "$SOURCE_DIR" ]; then
+        echo "エラー: $SOURCE_DIR は既存のGitリポジトリではないぞ。" >&2
+        exit 1
+    else
+        mkdir -p "$(dirname "$SOURCE_DIR")"
+        git clone "$REPO_URL" "$SOURCE_DIR"
+    fi
+fi
+RUNTIME_DIR="$SOURCE_DIR/.runtime/linux"
+VENV_DIR="$RUNTIME_DIR/venv"
+UPDATER_PATH="$SOURCE_DIR/tools/yt_dlp_auto_update.py"
+mkdir -p "$RUNTIME_DIR/bin"
+echo "管理対象の実体: $RUNTIME_DIR"
 
 install_umu
 setup_proton_wrapper
@@ -301,81 +394,130 @@ else
 fi
 echo "---"
 
-# --- 2. yt-dlp (Nightly) のインストール ---
-URL="https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp"
-if [ "$OS_TYPE" = "bazzite" ]; then
-    TARGET_PATH="$LOCAL_BIN/yt-dlp"
-else
-    TARGET_PATH="/usr/local/bin/yt-dlp"
+# --- 2. yt-dlp Nightly と追加pipパッケージを仮想環境に導入 ---
+echo "Python仮想環境を準備中: $VENV_DIR"
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+    echo "エラー: Python 3.11以上が必要じゃ。" >&2
+    exit 1
 fi
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+    python3 -m venv "$VENV_DIR"
+fi
+if ! "$VENV_DIR/bin/python" -m pip --version > /dev/null 2>&1; then
+    echo "エラー: 仮想環境内のpipが利用できん。python3-venvを確認するのじゃ。" >&2
+    exit 1
+fi
+echo "yt-dlp Nightlyと追加依存関係をインストール中..."
+"$VENV_DIR/bin/python" -m pip install --upgrade --upgrade-strategy eager --pre 'yt-dlp[default,curl-cffi,secretstorage]'
 
-echo "yt-dlp (Nightly) を更新中..."
-if [ "$OS_TYPE" = "bazzite" ]; then
-    download_file "$URL" "$TARGET_PATH"
-    chmod a+rx "$TARGET_PATH"
-else
-    TEMP_YTDLP=$(mktemp)
-    trap 'rm -f "$TEMP_YTDLP"' EXIT
-    download_file "$URL" "$TEMP_YTDLP"
-    sudo install -m 755 "$TEMP_YTDLP" "$TARGET_PATH"
-    rm -f "$TEMP_YTDLP"
-    trap - EXIT
+# 仮想環境を手動でactivateしなくても通常のyt-dlpコマンドで実行する
+TARGET_PATH="$RUNTIME_DIR/bin/yt-dlp"
+WRAPPER_TMP=$(mktemp)
+{
+    printf '#!/bin/bash\n# yt-dlp venv wrapper\n'
+    printf 'VENV_PYTHON=%q\n' "$VENV_DIR/bin/python"
+    printf 'UPDATER=%q\n' "$UPDATER_PATH"
+    cat <<'EOF_YTDLP_WRAPPER'
+show_help() {
+    exec "$VENV_PYTHON" -m yt_dlp --help
+}
+if [ -f "$UPDATER" ] && [ "${YT_DLP_SKIP_UPDATE:-}" != "1" ]; then
+    "$VENV_PYTHON" "$UPDATER" || true
 fi
-echo "yt-dlp 更新完了。"
+case "${1:-}" in
+    -h|--help) show_help ;;
+esac
+exec "$VENV_PYTHON" -m yt_dlp "$@"
+EOF_YTDLP_WRAPPER
+} > "$WRAPPER_TMP"
+install -m 755 "$WRAPPER_TMP" "$TARGET_PATH"
+rm -f "$WRAPPER_TMP"
+install_owned_link "$TARGET_PATH" "$LOCAL_BIN/yt-dlp"
+if [ "$OS_TYPE" = "apt" ]; then
+    install_owned_link "$TARGET_PATH" /usr/local/bin/yt-dlp true
+fi
+echo "yt-dlp実体: $TARGET_PATH"
+echo "yt-dlp起動リンク: $LOCAL_BIN/yt-dlp"
+"$VENV_DIR/bin/python" -m yt_dlp --version
 echo "---"
 
 # --- 3. Windows版 YTSubConverter.exe のインストール ---
-INSTALL_DIR="$HOME/.config/yt-dlp/tools/YTSubConverter"
+INSTALL_DIR="$RUNTIME_DIR/tools/YTSubConverter"
 EXE_PATH="$INSTALL_DIR/YTSubConverter.exe"
 EXE_URL="https://github.com/arcusmaximus/YTSubConverter/releases/download/1.6.4/YTSubConverter.exe"
 
 echo "Windows版 YTSubConverter.exe を配置中..."
 download_file "$EXE_URL" "$EXE_PATH"
-echo "EXE配置完了。"
+LEGACY_CONVERTER="$HOME/.config/yt-dlp/tools/YTSubConverter/YTSubConverter.exe"
+mkdir -p "$(dirname "$LEGACY_CONVERTER")"
+if [ -f "$LEGACY_CONVERTER" ] && [ ! -L "$LEGACY_CONVERTER" ]; then
+    if cmp -s "$LEGACY_CONVERTER" "$EXE_PATH"; then
+        rm -f -- "$LEGACY_CONVERTER"
+    else
+        echo "エラー: 既存の字幕変換ツールがダウンロード版と異なる: $LEGACY_CONVERTER" >&2
+        exit 1
+    fi
+fi
+if [ ! -e "$LEGACY_CONVERTER" ] && [ ! -L "$LEGACY_CONVERTER" ]; then
+    ln -s -- "$EXE_PATH" "$LEGACY_CONVERTER"
+fi
+echo "字幕変換ツール実体: $EXE_PATH"
 echo "---"
 
 # --- 4. Protonの準備 ---
 echo "YTSubConverter.exeはUMU / Proton経由で実行するぞ。"
 echo "---"
 
-# --- 5. Gist設定のクローン & リンク作成 ---
-GIST_DIR="$HOME/21141912fbacf40877f4cf877577e082"
-GIST_URL="https://gist.github.com/21141912fbacf40877f4cf877577e082.git"
+# --- 5. リポジトリ内の設定と字幕変換スクリプトをリンク ---
 CONFIG_DIR="$HOME/.config/yt-dlp"
 
 LINK_CONFIG="$CONFIG_DIR/config"
-LINK_SCRIPT="$CONFIG_DIR/z__run_sub_converter.sh"
-SOURCE_CONFIG="$GIST_DIR/yt-dlp config"
-SOURCE_SCRIPT="$GIST_DIR/z__run_sub_converter.sh"
-
-if [ ! -d "$GIST_DIR/.git" ]; then
-    if [ -e "$GIST_DIR" ]; then
-        echo "エラー: $GIST_DIR は既に存在するがGitリポジトリではないぞ。" >&2
-        exit 1
-    fi
-    git clone "$GIST_URL" "$GIST_DIR"
-else
-    git -C "$GIST_DIR" pull --ff-only
-fi
-
-if [ ! -f "$SOURCE_CONFIG" ] || [ ! -f "$SOURCE_SCRIPT" ]; then
-    echo "エラー: Gistの設定ファイルまたは字幕変換スクリプトが見つからん。" >&2
+LINK_SCRIPT="$CONFIG_DIR/run_sub_converter.sh"
+SOURCE_CONFIG="$SOURCE_DIR/yt-dlp config"
+SOURCE_SCRIPT="$SOURCE_DIR/run_sub_converter.sh"
+UPDATER_SOURCE="$SOURCE_DIR/tools/yt_dlp_auto_update.py"
+if [ ! -f "$UPDATER_SOURCE" ]; then
+    echo "エラー: 更新確認スクリプトが見つからん: $UPDATER_SOURCE" >&2
     exit 1
 fi
-
 mkdir -p "$CONFIG_DIR"
 ln -s -f "$SOURCE_CONFIG" "$LINK_CONFIG"
 ln -s -f "$SOURCE_SCRIPT" "$LINK_SCRIPT"
+LEGACY_SCRIPT_LINK="$CONFIG_DIR/z__run_sub_converter.sh"
+if [ -L "$LEGACY_SCRIPT_LINK" ]; then
+    case "$(readlink "$LEGACY_SCRIPT_LINK")" in
+        "$SOURCE_DIR/z__run_sub_converter.sh"|"$HOME/21141912fbacf40877f4cf877577e082/z__run_sub_converter.sh")
+            rm -f -- "$LEGACY_SCRIPT_LINK"
+            echo "旧字幕変換リンク削除: $LEGACY_SCRIPT_LINK"
+            ;;
+    esac
+fi
 chmod +x "$SOURCE_SCRIPT"
+echo "設定ファイル: $LINK_CONFIG"
+echo "yt-dlp起動時の自動更新: $UPDATER_PATH"
 echo "---"
 
 # --- 6. Deno のインストール ---
 echo "Deno (JavaScriptランタイム) をインストールするのじゃ..."
+export DENO_INSTALL="$RUNTIME_DIR/deno"
 curl -fsSL https://deno.land/install.sh | sh
-if [ -x "$HOME/.deno/bin/deno" ] && { [ ! -e "$LOCAL_BIN/deno" ] || [ -L "$LOCAL_BIN/deno" ]; }; then
-    ln -s -f "$HOME/.deno/bin/deno" "$LOCAL_BIN/deno"
+if [ -x "$RUNTIME_DIR/deno/bin/deno" ]; then
+    install_owned_link "$RUNTIME_DIR/deno/bin/deno" "$LOCAL_BIN/deno"
+else
+    echo "エラー: リポジトリ内にDenoが導入されておらん。" >&2
+    exit 1
 fi
 echo "Deno のインストール処理完了じゃ。"
+echo "---"
+
+# --- 7. 旧方式の残骸を整理（新設定・仮想環境の導入に成功した後） ---
+CLEANUP_SCRIPT="$SOURCE_DIR/tools/migration/remove-standalone.sh"
+if [ -f "$CLEANUP_SCRIPT" ]; then
+    echo "旧方式の不要ファイルを確認中..."
+    if ! bash "$CLEANUP_SCRIPT" --legacy-gist --legacy-runtime; then
+        echo "警告: 旧方式のファイル整理に失敗したぞ。手動で確認するのじゃ。" >&2
+    fi
+fi
 echo "---"
 
 echo "全てのセットアップが完了したぞ。今度こそ完璧じゃ！"

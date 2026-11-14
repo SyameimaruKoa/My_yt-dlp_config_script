@@ -2,7 +2,7 @@
 #
 # yt-dlp から呼び出される字幕変換スクリプト (Wine版・高信頼性コピー)
 #
-# 使用法: z__run_sub_converter.sh "動画ファイルのパス"
+# 使用法: run_sub_converter.sh "動画ファイルのパス"
 #
 
 # --- ヘルプ表示 ---
