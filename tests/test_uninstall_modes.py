@@ -19,6 +19,7 @@ class UninstallModesTests(unittest.TestCase):
         self.data = base / "data"
         source = pathlib.Path(__file__).resolve().parents[1]
         shutil.copy2(source / "uninstall_yt-dlp.sh", self.root / "uninstall_yt-dlp.sh")
+        (self.root / "setup_yt-dlp.sh").write_text("#!/bin/bash\n")
         migration = self.root / "tools" / "migration"
         migration.mkdir(parents=True)
         shutil.copy2(source / "tools" / "migration" / "remove-standalone.sh",
