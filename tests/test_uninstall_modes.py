@@ -78,7 +78,7 @@ class UninstallModesTests(unittest.TestCase):
         self.assertTrue(self.root.exists())
 
     @unittest.skipUnless(shutil.which("git"), "Git is required")
-    def test_default_full_uninstall_removes_clean_published_checkout(self):
+    def test_default_full_uninstall_removes_modified_checkout(self):
         remote = pathlib.Path(self.temp.name) / "origin.git"
         subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True,
                        capture_output=True)
@@ -97,8 +97,12 @@ class UninstallModesTests(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.root), "remote", "set-url", "origin",
                         "https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git"],
                        check=True, capture_output=True)
+        (self.root / "untracked.txt").write_text("local changes\n")
+        (self.root / "uninstall_yt-dlp.sh").write_text(
+            (self.root / "uninstall_yt-dlp.sh").read_text() + "\n# locally modified\n"
+        )
         output = self.call().stdout
-        self.assertIn("リポジトリ削除完了", output)
+        self.assertIn("リポジトリ全削除完了", output)
         self.assertFalse(self.root.exists())
 
 
