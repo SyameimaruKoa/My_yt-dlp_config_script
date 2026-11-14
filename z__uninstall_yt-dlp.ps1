@@ -124,7 +124,11 @@ $Config = Get-Item -LiteralPath $ConfigLink -Force -ErrorAction SilentlyContinue
 $GeneratedConfig = Join-Path $Root 'win yt-dlp config'
 if ($Config) {
     if ($Config.LinkType) {
-        if ([string]$Config.Target -ieq $GeneratedConfig) {
+        if ([string]$Config.Target -ieq $GeneratedConfig -or
+            ($Config.LinkType -eq 'HardLink' -and
+            (Test-Path -LiteralPath $GeneratedConfig) -and
+            ((Get-FileHash -LiteralPath $ConfigLink -Algorithm SHA256).Hash -eq
+             (Get-FileHash -LiteralPath $GeneratedConfig -Algorithm SHA256).Hash))) {
             Remove-OwnedFile $ConfigLink
         }
         else {
