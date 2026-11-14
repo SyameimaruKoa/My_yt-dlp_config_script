@@ -10,7 +10,7 @@
     .\uninstall_yt-dlp.ps1 --dry-run
 .EXAMPLE
     .\uninstall_yt-dlp.ps1
- .EXAMPLE
+.EXAMPLE
     .\uninstall_yt-dlp.ps1 --cleanup-only
 .EXAMPLE
     .\uninstall_yt-dlp.ps1 --keep-repository
@@ -316,11 +316,22 @@ if ($RemoveRepository) {
     else {
     $Origin = & git -C $Root remote get-url origin 2>$null
     $Dirty = & git -C $Root status --porcelain --untracked-files=all 2>$null
-    if (($LASTEXITCODE -ne 0) -or $Dirty -or
-        $Origin -notin @('https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git', 'git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git')) {
+    $AllowedOrigins = @(
+        'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git',
+        'https://github.com/SyameimaruKoa/My_yt-dlp_config_script',
+        'git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git'
+    )
+    if (($LASTEXITCODE -ne 0) -or $Dirty -or $Origin -notin $AllowedOrigins) {
         Write-Output "リポジトリ保持（管理外またはローカル変更あり）: $Root"
     }
-    elseif ($DryRun) {
+    else {
+        & git -C $Root rev-parse --verify '@{upstream}' 2>$null | Out-Null
+        $UpstreamValid = $LASTEXITCODE -eq 0
+        $Unpushed = if ($UpstreamValid) { & git -C $Root rev-list --count '@{upstream}..HEAD' 2>$null } else { 'unknown' }
+        if (-not $UpstreamValid -or $LASTEXITCODE -ne 0 -or $Unpushed -ne '0') {
+            Write-Output "リポジトリ保持（未送信コミットまたは追跡先不明）: $Root"
+        }
+        elseif ($DryRun) {
         Write-Output "リポジトリ削除予定: $Root"
     }
     else {
@@ -332,6 +343,7 @@ if ($RemoveRepository) {
         }
         Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
         Write-Output "リポジトリ削除完了: $Root"
+        }
     }
     }
 }
