@@ -212,6 +212,11 @@ if (Test-Path -LiteralPath $Runtime -PathType Container) {
     }
 }
 if ($RemoveRepository) {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue) -or
+        -not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
+        Write-Output "リポジトリ保持（Git管理情報が見つからない）: $Root"
+    }
+    else {
     $Origin = & git -C $Root remote get-url origin 2>$null
     $Dirty = & git -C $Root status --porcelain --untracked-files=all 2>$null
     if (($LASTEXITCODE -ne 0) -or $Dirty -or
@@ -224,6 +229,7 @@ if ($RemoveRepository) {
     else {
         Remove-Item -LiteralPath $Root -Recurse -Force
         Write-Output "リポジトリ削除完了: $Root"
+    }
     }
 }
 Write-Output 'アンインストール処理が完了したぞ。'
