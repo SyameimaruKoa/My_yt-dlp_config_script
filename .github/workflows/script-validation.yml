@@ -155,11 +155,12 @@ jobs:
                       & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
                       & git -C $gistPath checkout --detach HEAD | Out-Null
                       .\tools\migration\cleanup-legacy.ps1 | Out-Null
-                      if (-not (Test-Path -LiteralPath $gistPath)) { throw 'Detached Gist clone was removed.' }
-                      & git -C $gistPath switch main | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Detached Gist clone was not removed.' }
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
                       Set-Content -LiteralPath (Join-Path $gistPath 'private.txt') -Value 'keep' -Encoding ASCII
                       .\tools\migration\cleanup-legacy.ps1 | Out-Null
-                      if (-not (Test-Path -LiteralPath (Join-Path $gistPath 'private.txt'))) { throw 'Dirty Gist clone was removed.' }
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Dirty Gist clone was not removed.' }
                       $bin = Join-Path $runtime 'bin'
                       $venv = Join-Path $runtime 'venv\Scripts'
                       New-Item -ItemType Directory -Path $bin, $venv -Force | Out-Null
@@ -207,6 +208,7 @@ jobs:
                       & git -C $source push -u origin main | Out-Null
                       & git clone $remote $checkout | Out-Null
                       & git -C $checkout remote set-url origin 'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git'
+                      Set-Content -LiteralPath (Join-Path $checkout 'local-change.txt') -Value 'modified' -Encoding ASCII
                       $runtime = Join-Path $checkout '.runtime\windows\venv'
                       New-Item -ItemType Directory -Path $runtime -Force | Out-Null
                       Set-Content -LiteralPath (Join-Path $runtime 'pyvenv.cfg') -Value 'home = CI' -Encoding ASCII
@@ -215,7 +217,7 @@ jobs:
                       New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
                       & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $checkout 'uninstall_yt-dlp.ps1') | Out-Null
                       if ($LASTEXITCODE -ne 0) { throw 'Full uninstall failed.' }
-                      if (Test-Path -LiteralPath $checkout) { throw 'Clean checkout was not removed by default.' }
+                      if (Test-Path -LiteralPath $checkout) { throw 'Modified checkout was not removed by default.' }
                   }
                   finally {
                       $env:LOCALAPPDATA = $oldLocal
