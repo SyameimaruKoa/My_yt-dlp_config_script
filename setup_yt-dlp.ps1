@@ -6,11 +6,11 @@
     yt-dlp.cmd をユーザーPATHに登録し、仮想環境を手動で有効化せずにyt-dlpを実行できるようにする。
     wingetでffmpeg、aria2、Denoを準備し、YTSubConverterとWindows用設定ファイルも配置する。
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1
+    .\setup_yt-dlp.ps1
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1 -h
+    .\setup_yt-dlp.ps1 -h
 .EXAMPLE
-    .\z__setup_yt-dlp.ps1 --help
+    .\setup_yt-dlp.ps1 --help
 .NOTES
     文字コード: UTF-8 BOM
 #>
@@ -231,9 +231,9 @@ if (-not (Test-Path -LiteralPath $ConverterPath) -or (Get-Item -LiteralPath $Con
 [Environment]::SetEnvironmentVariable('YTSC_PATH', $ConverterPath, 'User')
 $env:YTSC_PATH = $ConverterPath
 
-$ConverterScript = Join-Path $PSScriptRoot 'z__convert_config.ps1'
+$ConverterScript = Join-Path $PSScriptRoot 'convert_config.ps1'
 if (-not (Test-Path -LiteralPath $ConverterScript)) {
-    throw 'z__convert_config.ps1 が見つからんぞ。'
+    throw 'convert_config.ps1 が見つからんぞ。'
 }
 & $ConverterScript
 if (-not $?) {

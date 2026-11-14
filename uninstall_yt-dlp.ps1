@@ -5,13 +5,13 @@
     リポジトリ内venv、起動ラッパー、MPC-BE専用Shim、Deno、字幕変換ツール、
     設定ファイル、歴代セットアップで生成した旧ファイルを整理する。
 .EXAMPLE
-    .\z__uninstall_yt-dlp.ps1 --dry-run
+    .\uninstall_yt-dlp.ps1 --dry-run
 .EXAMPLE
-    .\z__uninstall_yt-dlp.ps1
+    .\uninstall_yt-dlp.ps1
 .EXAMPLE
-    .\z__uninstall_yt-dlp.ps1 --remove-repository
+    .\uninstall_yt-dlp.ps1 --remove-repository
 .EXAMPLE
-    .\z__uninstall_yt-dlp.ps1 --help
+    .\uninstall_yt-dlp.ps1 --help
 .NOTES
     UTF-8 BOM
 #>

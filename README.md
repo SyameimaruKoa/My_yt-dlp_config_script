@@ -6,9 +6,9 @@ yt-dlp Nightlyと追加ツールのセットアップ、およびWindows・Linux
 
 | OS | セットアップ | 外部ツールの管理 |
 | --- | --- | --- |
-| Ubuntu 24.04 / 26.04、Debian 12 / 13（amd64） | `z__setup_yt-dlp.sh` | apt / Deno公式インストーラー / UMU |
-| Bazzite | `z__setup_yt-dlp.sh` | Homebrew / Deno公式インストーラー / インストール済みProton |
-| Windows 10 / 11 | `z__setup_yt-dlp.ps1` | winget（ffmpeg・aria2） / Deno ZIP |
+| Ubuntu 24.04 / 26.04、Debian 12 / 13（amd64） | `setup_yt-dlp.sh` | apt / Deno公式インストーラー / UMU |
+| Bazzite | `setup_yt-dlp.sh` | Homebrew / Deno公式インストーラー / インストール済みProton |
+| Windows 10 / 11 | `setup_yt-dlp.ps1` | winget（ffmpeg・aria2） / Deno ZIP |
 
 Python 3.11以上が必要じゃ。WindowsではPythonとwingetを準備しておくのじゃ。
 
@@ -19,7 +19,7 @@ Python 3.11以上が必要じゃ。WindowsではPythonとwingetを準備して�
 ```bash
 git clone https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git
 cd My_yt-dlp_config_script
-bash z__setup_yt-dlp.sh
+bash setup_yt-dlp.sh
 ```
 
 yt-dlpとpip依存パッケージは、通常の`yt-dlp`コマンドを実行するたびに更新確認するのじゃ。セットアップスクリプト・設定を更新したい場合は、リポジトリで`git pull --ff-only`を実行してセットアップを再実行するぞ。
@@ -27,7 +27,7 @@ yt-dlpとpip依存パッケージは、通常の`yt-dlp`コマンドを実行す
 セットアップではffmpeg・aria2・Gitなどを準備し、yt-dlp NightlyとPython追加パッケージを**リポジトリ内の仮想環境**にインストールする。DenoとYTSubConverter.exe、Proton Prefixもリポジトリ内に配置するぞ。字幕変換はUMU / Proton経由で動作し、Bazziteでは既存のProtonを優先するのじゃ。`PROTON_PATH`で選択を上書きできる。
 
 ```bash
-PROTON_PATH="/path/to/Proton" bash z__setup_yt-dlp.sh
+PROTON_PATH="/path/to/Proton" bash setup_yt-dlp.sh
 ```
 
 設定ファイル `~/.config/yt-dlp/config` と字幕変換スクリプトは、このリポジトリのファイルへシンボリックリンクされる。以前のGistではなく、リポジトリ側の内容が使用されるのじゃ。
@@ -37,7 +37,7 @@ PROTON_PATH="/path/to/Proton" bash z__setup_yt-dlp.sh
 リポジトリをクローンするかZIPを展開し、そのディレクトリでPowerShellを実行するのじゃ。
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\z__setup_yt-dlp.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup_yt-dlp.ps1
 ```
 
 自動で導入・設定されるもの：
@@ -129,22 +129,35 @@ bash tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime
 **Linux**
 
 ```bash
-bash z__uninstall_yt-dlp.sh --dry-run
-bash z__uninstall_yt-dlp.sh
-bash z__uninstall_yt-dlp.sh --remove-repository
+bash uninstall_yt-dlp.sh --dry-run
+bash uninstall_yt-dlp.sh
+bash uninstall_yt-dlp.sh --remove-repository
 ```
 
 **Windows（PowerShell）**
 
 ```powershell
-.\z__uninstall_yt-dlp.ps1 --dry-run
-.\z__uninstall_yt-dlp.ps1
-.\z__uninstall_yt-dlp.ps1 --remove-repository
+.\uninstall_yt-dlp.ps1 --dry-run
+.\uninstall_yt-dlp.ps1
+.\uninstall_yt-dlp.ps1 --remove-repository
 ```
 
 OS共用の依存パッケージ（ffmpeg・aria2・Git・Python・curlなど）は、他の用途でも使用するため一括削除しない。旧方式が導入したものとユーザーが既に導入していたものは、インストール時の記録がない限り区別できないのじゃ。
 
 Windowsアンインストーラーは、削除対象がなくても「対象なし」と検査先を出力する。終了時にはPATH上に残る`yt-dlp`の場所と、既知の配置先にある実行ファイルも確認する。管理外と判定した実行ファイルは削除せず、場所のみ報告するぞ。
+
+## ダウンロード速度の比較
+
+通常のHTTP/FTPはaria2c（最大8接続）、DASH/HLSはyt-dlp内蔵ダウンローダー（最大8フラグメント並列）を利用する。
+
+YouTubeが単一HTTPSストリームとして扱われる場合、DASH/HLS用の設定では速度が変わらない。速度を比較する場合は同じ動画で以下を個別に試すのじゃ。
+
+```bash
+yt-dlp --downloader native --concurrent-fragments 8 "https://youtu.be/I8WP8Y2tdYE"
+yt-dlp --downloader aria2c "https://youtu.be/I8WP8Y2tdYE"
+```
+
+実行中のaria2cダウンロードを切り替える機能ではない。再開の互換性が保証されないため、切り替えるなら別の一時保存先で検証する。
 
 ## 使用方法
 
@@ -159,24 +172,24 @@ Windowsでも同じ`yt-dlp`コマンドで使用できるのじゃ。コマン�
 ## 設定と字幕変換
 
 - `yt-dlp config`：共通設定。FirefoxのCookie、字幕取得、サムネイル、メタデータ、aria2、ダウンロード品質・ファイル名などを定義。
-- `z__run_sub_converter.sh`：LinuxでSRV3字幕を検出し、装飾付き字幕はProton経由のYTSubConverterでASSに、単純な字幕はSRTに変換。
-- `z__run_sub_converter.ps1`：Windows版の字幕変換。YTSubConverter.exeを`YTSC_PATH`から検索。
-- `z__convert_config.ps1`：Linux用設定の`--exec`や一時ファイルパスをWindows用へ変換し、`win yt-dlp config`を生成。
+- `run_sub_converter.sh`：LinuxでSRV3字幕を検出し、装飾付き字幕はProton経由のYTSubConverterでASSに、単純な字幕はSRTに変換。
+- `run_sub_converter.ps1`：Windows版の字幕変換。YTSubConverter.exeを`YTSC_PATH`から検索。
+- `convert_config.ps1`：Linux用設定の`--exec`や一時ファイルパスをWindows用へ変換し、`win yt-dlp config`を生成。
 
 設定のLinux用Discord通知は`Koa_Discord_Message.sh`を呼び出す。通知が不要なら`yt-dlp config`内の該当`--exec`行をコメントアウトするのじゃ。Linuxでは`~/.local/bin`がPATHに含まれる新しいシェルを開いて実行するぞ。
 
 ## ヘルプ
 
 ```bash
-bash z__setup_yt-dlp.sh --help
-bash z__uninstall_yt-dlp.sh --help
-bash z__run_sub_converter.sh --help
+bash setup_yt-dlp.sh --help
+bash uninstall_yt-dlp.sh --help
+bash run_sub_converter.sh --help
 bash tools/migration/remove-standalone.sh --help
 ```
 
 ```powershell
-.\z__setup_yt-dlp.ps1 --help
-.\z__uninstall_yt-dlp.ps1 --help
-.\z__convert_config.ps1 --help
-.\z__run_sub_converter.ps1 -Help
+.\setup_yt-dlp.ps1 --help
+.\uninstall_yt-dlp.ps1 --help
+.\convert_config.ps1 --help
+.\run_sub_converter.ps1 -Help
 ```
