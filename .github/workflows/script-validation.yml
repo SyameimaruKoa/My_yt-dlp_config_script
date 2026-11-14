@@ -58,6 +58,13 @@ jobs:
                       if ($parseErrors.Count -gt 0) { throw "$($file.Name): $parseErrors" }
                   }
                   .\setup_yt-dlp.ps1 --help | Out-Null
+                  $installer = Get-Content -LiteralPath 'setup_yt-dlp.ps1' -Raw -Encoding UTF8
+                  if ($installer -match 'winget') { throw 'Windows installer still depends on winget.' }
+                  if (-not $installer.Contains('static-ffmpeg')) { throw 'FFmpeg pip fallback is missing.' }
+                  if (-not $installer.Contains('Get-Command ffmpeg')) { throw 'Existing FFmpeg detection is missing.' }
+                  if (-not $installer.Contains('Get-Command ffprobe')) { throw 'Existing FFprobe detection is missing.' }
+                  if (-not $installer.Contains('Get-Command aria2c')) { throw 'Existing aria2 detection is missing.' }
+
                   .\uninstall_yt-dlp.ps1 --help | Out-Null
                   .\uninstall_yt-dlp.ps1 --dry-run | Out-Null
                   .\convert_config.ps1 --help | Out-Null
