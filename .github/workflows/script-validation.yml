@@ -179,7 +179,7 @@ jobs:
                       if (Test-Path -LiteralPath $oldVenv) { throw 'Cleanup-only kept old venv.' }
                       if (-not (Test-Path -LiteralPath (Join-Path $runtime 'venv\Scripts\python.exe'))) { throw 'Cleanup-only removed current venv.' }
                       if (-not (Test-Path -LiteralPath (Join-Path $configDir 'config'))) { throw 'Cleanup-only removed current config.' }
-                      if (-not (Test-Path -LiteralPath $gistPath)) { throw 'Cleanup-only removed dirty Gist.' }
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Cleanup-only did not remove dirty Gist.' }
                   }
                   finally {
                       $env:LOCALAPPDATA = $oldLocal
