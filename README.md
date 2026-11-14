@@ -107,18 +107,20 @@ Remove-Item Env:YT_DLP_SKIP_UPDATE
 
 更新結果の詳細なpipログは`YT_DLP_UPDATE_DEBUG=1`を指定し、更新に失敗したときに表示できるぞ。
 
-## 旧単独実行ファイルの削除（一度限り）
+## 旧方式からの自動移行と削除
 
-Linux用の移行スクリプトを`tools/migration/`に配置したのじゃ。**新しい仮想環境版のラッパーは削除しない**。Windowsでは旧単独版の導入を行っていないため、削除作業は不要じゃ。
+Linuxセットアップ完了時に`tools/migration/remove-standalone.sh --legacy-gist`を実行する。旧方式で配置した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`はpip仮想環境用ラッパーに置換され、残ったZIP形式の単独配布ファイルも確認する。**新ラッパーは削除しない**。
 
-**Linux**
+旧方式で設定ファイルを取得していた`~/21141912fbacf40877f4cf877577e082`も、正しいGistのクローンで、ローカル変更・追加ファイル・未送信コミットがない場合だけ自動削除する。条件に合わない場合は保持するぞ。Windowsでは旧方式のLinux用Gistクローンは使用しない。
+
+削除対象を事前に確認する場合や、手動で再実行する場合は以下じゃ。
 
 ```bash
-bash tools/migration/remove-standalone.sh --dry-run
-bash tools/migration/remove-standalone.sh
+bash tools/migration/remove-standalone.sh --legacy-gist --dry-run
+bash tools/migration/remove-standalone.sh --legacy-gist
 ```
 
-以前のインストーラーが使用した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`を確認し、単独配布されたZIP形式のyt-dlpだけ削除する。別の場所に置いた場合は`--path /path/to/yt-dlp`を指定するのじゃ。セットアップによって既にラッパーへ置換されていれば削除対象にはならん。
+別の場所のyt-dlp単独版を調べる場合は`--path /path/to/yt-dlp`を指定するのじゃ。
 
 ## 使用方法
 
