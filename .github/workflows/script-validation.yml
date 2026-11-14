@@ -66,6 +66,8 @@ jobs:
                   if (-not $installer.Contains('Get-Command aria2c')) { throw 'Existing aria2 detection is missing.' }
 
                   .\uninstall_yt-dlp.ps1 --help | Out-Null
+                  .\tools\migration\cleanup-legacy.ps1 --help | Out-Null
+                  .\uninstall_yt-dlp.ps1 --cleanup-only --help | Out-Null
                   .\uninstall_yt-dlp.ps1 --dry-run | Out-Null
                   .\convert_config.ps1 --help | Out-Null
                   .\run_sub_converter.ps1 -Help | Out-Null
@@ -114,6 +116,114 @@ jobs:
                   finally {
                       $env:PYTHONPATH = $originalPythonPath
                       Remove-Item Env:FFMPEG_TEST_SOURCE, Env:FFPROBE_TEST_SOURCE -ErrorAction SilentlyContinue
+                  }
+            - name: Check Windows Gist removal and keep-current cleanup
+              shell: powershell
+              run: |
+                  $gistId = '21141912fbacf40877f4cf877577e082'
+                  $gistPath = Join-Path $HOME $gistId
+                  if (Test-Path -LiteralPath $gistPath) { throw 'Legacy Gist test location is already occupied.' }
+                  $source = Join-Path $env:RUNNER_TEMP 'gist-fixture-source'
+                  $remote = Join-Path $env:RUNNER_TEMP 'gist-fixture-remote.git'
+                  $oldLocal = $env:LOCALAPPDATA
+                  $oldApp = $env:APPDATA
+                  $runtime = Join-Path (Get-Location).ProviderPath '.runtime\windows'
+                  try {
+                      $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'gist-test-appdata\local'
+                      $env:APPDATA = Join-Path $env:RUNNER_TEMP 'gist-test-appdata\roaming'
+                      New-Item -ItemType Directory -Path $source, $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
+                      & git init --bare --initial-branch=main $remote | Out-Null
+                      & git -C $source init --initial-branch=main | Out-Null
+                      Set-Content -LiteralPath (Join-Path $source 'yt-dlp config') -Value 'legacy' -Encoding ASCII
+                      Set-Content -LiteralPath (Join-Path $source '.gitignore') -Value 'win yt-dlp config' -Encoding ASCII
+                      & git -C $source add . | Out-Null
+                      & git -C $source -c user.name=CI -c user.email=ci@example.invalid commit -m initial | Out-Null
+                      & git -C $source remote add origin $remote | Out-Null
+                      & git -C $source push -u origin main | Out-Null
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      .\tools\migration\cleanup-legacy.ps1 --dry-run | Out-Null
+                      if (-not (Test-Path -LiteralPath $gistPath)) { throw 'Gist dry-run removed clone.' }
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Clean Gist clone was not removed.' }
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      Set-Content -LiteralPath (Join-Path $gistPath 'win yt-dlp config') -Value 'generated' -Encoding ASCII
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Gist with known ignored config was not removed.' }
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      & git -C $gistPath checkout --detach HEAD | Out-Null
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Detached Gist clone was not removed.' }
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      Set-Content -LiteralPath (Join-Path $gistPath 'private.txt') -Value 'keep' -Encoding ASCII
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Dirty Gist clone was not removed.' }
+                      $bin = Join-Path $runtime 'bin'
+                      $venv = Join-Path $runtime 'venv\Scripts'
+                      New-Item -ItemType Directory -Path $bin, $venv -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $bin 'yt-dlp.cmd') -Value '@echo off' -Encoding ASCII
+                      Set-Content -LiteralPath (Join-Path $venv 'python.exe') -Value 'python' -Encoding ASCII
+                      $configDir = Join-Path $env:APPDATA 'yt-dlp'
+                      New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $configDir 'config') -Value 'current' -Encoding ASCII
+                      $oldVenv = Join-Path $env:LOCALAPPDATA 'yt-dlp\venv'
+                      New-Item -ItemType Directory -Path (Join-Path $oldVenv 'Scripts') -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $oldVenv 'pyvenv.cfg') -Value 'home = CI' -Encoding ASCII
+                      Set-Content -LiteralPath (Join-Path $oldVenv 'Scripts\yt-dlp.exe') -Value 'test' -Encoding ASCII
+                      .\uninstall_yt-dlp.ps1 --cleanup-only --dry-run | Out-Null
+                      if (-not (Test-Path -LiteralPath $oldVenv)) { throw 'Cleanup dry-run removed legacy venv.' }
+                      .\uninstall_yt-dlp.ps1 --cleanup-only | Out-Null
+                      if (Test-Path -LiteralPath $oldVenv) { throw 'Cleanup-only kept old venv.' }
+                      if (-not (Test-Path -LiteralPath (Join-Path $runtime 'venv\Scripts\python.exe'))) { throw 'Cleanup-only removed current venv.' }
+                      if (-not (Test-Path -LiteralPath (Join-Path $configDir 'config'))) { throw 'Cleanup-only removed current config.' }
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Cleanup-only did not remove dirty Gist.' }
+                  }
+                  finally {
+                      $env:LOCALAPPDATA = $oldLocal
+                      $env:APPDATA = $oldApp
+                      if (Test-Path -LiteralPath $gistPath) { Remove-Item -LiteralPath $gistPath -Recurse -Force }
+                      if (Test-Path -LiteralPath $runtime) { Remove-Item -LiteralPath $runtime -Recurse -Force }
+                  }
+            - name: Check Windows default full uninstall removes clean Git checkout
+              shell: powershell
+              run: |
+                  $source = Join-Path $env:RUNNER_TEMP 'full-uninstall-source'
+                  $remote = Join-Path $env:RUNNER_TEMP 'full-uninstall-remote.git'
+                  $checkout = Join-Path $env:RUNNER_TEMP 'full-uninstall-checkout'
+                  $oldLocal = $env:LOCALAPPDATA
+                  $oldApp = $env:APPDATA
+                  try {
+                      New-Item -ItemType Directory -Path (Join-Path $source 'tools\migration') -Force | Out-Null
+                      Copy-Item -LiteralPath 'uninstall_yt-dlp.ps1' -Destination $source
+                      Copy-Item -LiteralPath 'setup_yt-dlp.ps1' -Destination $source
+                      Copy-Item -LiteralPath 'yt-dlp config' -Destination $source
+                      Copy-Item -LiteralPath 'tools\migration\cleanup-legacy.ps1' -Destination (Join-Path $source 'tools\migration')
+                      Set-Content -LiteralPath (Join-Path $source '.gitignore') -Value '.runtime/' -Encoding ASCII
+                      & git init --bare --initial-branch=main $remote | Out-Null
+                      & git -C $source init --initial-branch=main | Out-Null
+                      & git -C $source add . | Out-Null
+                      & git -C $source -c user.name=CI -c user.email=ci@example.invalid commit -m initial | Out-Null
+                      & git -C $source remote add origin $remote | Out-Null
+                      & git -C $source push -u origin main | Out-Null
+                      & git clone $remote $checkout | Out-Null
+                      & git -C $checkout remote set-url origin 'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git'
+                      Set-Content -LiteralPath (Join-Path $checkout 'local-change.txt') -Value 'modified' -Encoding ASCII
+                      $runtime = Join-Path $checkout '.runtime\windows\venv'
+                      New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $runtime 'pyvenv.cfg') -Value 'home = CI' -Encoding ASCII
+                      $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'full-uninstall-appdata\local'
+                      $env:APPDATA = Join-Path $env:RUNNER_TEMP 'full-uninstall-appdata\roaming'
+                      New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
+                      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $checkout 'uninstall_yt-dlp.ps1') | Out-Null
+                      if ($LASTEXITCODE -ne 0) { throw 'Full uninstall failed.' }
+                      if (Test-Path -LiteralPath $checkout) { throw 'Modified checkout was not removed by default.' }
+                  }
+                  finally {
+                      $env:LOCALAPPDATA = $oldLocal
+                      $env:APPDATA = $oldApp
                   }
             - name: Check Windows uninstall discovery and dry-run
               shell: powershell

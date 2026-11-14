@@ -112,7 +112,7 @@ Remove-Item Env:YT_DLP_SKIP_UPDATE
 
 Linuxセットアップ完了時に`tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime`を実行する。旧方式で配置した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`はリポジトリ内のpip仮想環境用ラッパーへのシンボリックリンクに置換される。旧venv・旧更新スクリプト・旧Proton Prefix・旧Deno本体を検出して整理し、新ラッパーは残すぞ。
 
-旧方式で設定ファイルを取得していた`~/21141912fbacf40877f4cf877577e082`も、正しいGistのクローンで、ローカル変更・追加ファイル・未送信コミットがない場合だけ自動削除する。条件に合わない場合は保持するぞ。Windowsでは旧方式のLinux用Gistクローンは使用しない。旧Windows venv・自動更新スクリプト・字幕変換ツール・MPC-BE Shimは、新しいリポジトリ内の実体へ移行した後に整理する。
+旧方式の`21141912fbacf40877f4cf877577e082`はLinuxのホーム、Windowsのユーザーフォルダ・AppData配下で確認する。対象の旧GistフォルダはGitの取得元・ローカル変更・未送信コミットに関係なく全削除する。Windowsでは旧venv・旧更新スクリプト・字幕変換ツール・旧MPC-BE Shimも、現行リンクを除いて整理する。
 
 削除対象を事前に確認する場合や、手動で再実行する場合は以下じゃ。
 
@@ -125,27 +125,40 @@ bash tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime
 
 ## アンインストール
 
-インストールで作ったリポジトリ内の実行環境とリンク、歴代の旧方式によるファイルを削除する。必要なら`--remove-repository`でGit作業ツリー自体も削除できる（未コミットの変更がある場合は保持）。`--dry-run`では削除せず結果を確認できるぞ。
+**アンインストーラーはLinux・Windowsとも2モードじゃ。**
+
+- 引数なし：現行のvenv・設定・起動リンク・字幕変換ツール・旧Gistを含む、インストール成果物を全削除する。**現行リポジトリのローカル変更・未追跡ファイル・未送信コミットも削除**する
+- `--cleanup-only`：旧Gistと旧方式の残骸だけを削除。現行のvenv・設定・リンク・リポジトリは保持する（現行セットアップ完了後に使用）
+- `--dry-run`：削除予定と保持理由のみ表示。両モードで併用可能
+- `--keep-repository`：完全アンインストール時もGit作業ツリーは保持する
+
+旧Gistと現行リポジトリにある変更済みファイルも削除対象じゃ。
 
 **Linux**
 
 ```bash
+bash uninstall_yt-dlp.sh --cleanup-only --dry-run
+bash uninstall_yt-dlp.sh --cleanup-only
 bash uninstall_yt-dlp.sh --dry-run
 bash uninstall_yt-dlp.sh
-bash uninstall_yt-dlp.sh --remove-repository
+bash uninstall_yt-dlp.sh --keep-repository
 ```
 
 **Windows（PowerShell）**
 
 ```powershell
+.\uninstall_yt-dlp.ps1 --cleanup-only --dry-run
+.\uninstall_yt-dlp.ps1 --cleanup-only
 .\uninstall_yt-dlp.ps1 --dry-run
 .\uninstall_yt-dlp.ps1
-.\uninstall_yt-dlp.ps1 --remove-repository
+.\uninstall_yt-dlp.ps1 --keep-repository
 ```
 
-OS共用の依存パッケージ（ffmpeg・aria2・Git・Python・curlなど）は、他の用途でも使用するため一括削除しない。旧方式が導入したものとユーザーが既に導入していたものは、インストール時の記録がない限り区別できないのじゃ。
+実行ファイル・venv・Deno・字幕変換ツールなど、専用の実体は`<リポジトリ>/.runtime/`に集約される。リポジトリのフォルダを直接削除しても専用の実体はなくなるが、OS側の起動リンク、設定リンク、PATH登録は残るため、完全削除にはアンインストーラーを使用する。
 
-Windowsアンインストーラーは、削除対象がなくても「対象なし」と検査先を出力する。終了時にはPATH上に残る`yt-dlp`の場所と、既知の配置先にある実行ファイルも確認する。管理外と判定した実行ファイルは削除せず、場所のみ報告するぞ。
+他の用途でも使用するOS共用の依存パッケージ（ffmpeg・aria2・Git・Python・curlなど）は一括削除しない。過去のセットアップがインストールしたかどうかを特定できないためじゃ。リポジトリ内に導入した専用バイナリとvenvは削除対象じゃ。
+
+Windowsアンインストーラーは、削除対象がなくても「対象なし」と検査先を出力する。セットアップの成功後にも旧Gistの整理を自動実行する。終了時にはPATH上に残る`yt-dlp`の場所と、既知の配置先にある実行ファイルも確認する。管理外と判定した実行ファイルは削除せず、場所のみ報告するぞ。
 
 ## ダウンロード速度の比較
 

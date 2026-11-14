@@ -91,7 +91,26 @@ function Set-ManagedConfigLink {
             Write-Output "設定リンク確認済み: $Link"
             return
         }
-        throw "管理外の設定リンクは変更しないぞ: $Link"
+        $GistId = '21141912fbacf40877f4cf877577e082'
+        $GistLocations = @(
+            (Join-Path $HOME $GistId),
+            (Join-Path $env:LOCALAPPDATA "yt-dlp\$GistId"),
+            (Join-Path $env:APPDATA "yt-dlp\$GistId")
+        )
+        $LegacyTargets = @()
+        foreach ($Location in $GistLocations) {
+            $LegacyTargets += (Join-Path $Location 'win yt-dlp config')
+            $LegacyTargets += (Join-Path $Location 'yt-dlp config')
+        }
+        if ($Existing.LinkType -eq 'SymbolicLink' -and
+            [string]$Existing.Target -in $LegacyTargets) {
+            [System.IO.File]::Delete($Link)
+            Write-Output "旧Gistの設定リンクを解除: $Link"
+            $Existing = $null
+        }
+        else {
+            throw "管理外の設定リンクは変更しないぞ: $Link"
+        }
     }
     if ($Existing) {
         if ($Existing.PSIsContainer) {
@@ -387,23 +406,13 @@ Write-Output "Deno実体: $DenoExe"
 #endregion
 
 #region 旧方式の専用ファイルを整理
-$OldRoot = Join-Path $env:LOCALAPPDATA 'yt-dlp'
-$OldVenv = Join-Path $OldRoot 'venv'
-if ((Test-Path -LiteralPath (Join-Path $OldVenv 'pyvenv.cfg')) -and
-    (Test-Path -LiteralPath (Join-Path $OldVenv 'Scripts\yt-dlp.exe'))) {
-    Remove-Item -LiteralPath $OldVenv -Recurse -Force
-    Write-Output "旧venv削除: $OldVenv"
+$LegacyCleanup = Join-Path $PSScriptRoot 'tools\migration\cleanup-legacy.ps1'
+if (-not (Test-Path -LiteralPath $LegacyCleanup -PathType Leaf)) {
+    throw "旧方式の整理スクリプトが見つからん: $LegacyCleanup"
 }
-$OldUpdater = Join-Path $OldRoot 'auto_update.py'
-if ((Test-Path -LiteralPath $OldUpdater -PathType Leaf) -and
-    (Select-String -LiteralPath $OldUpdater -SimpleMatch 'yt-dlp-update.lock' -Quiet)) {
-    Remove-Item -LiteralPath $OldUpdater -Force
-    Write-Output "旧更新スクリプト削除: $OldUpdater"
-}
-$OldConverter = Join-Path $ConfigDir 'tools\YTSubConverter\YTSubConverter.exe'
-if (Test-Path -LiteralPath $OldConverter -PathType Leaf) {
-    Remove-Item -LiteralPath $OldConverter -Force
-    Write-Output "旧字幕変換ツール削除: $OldConverter"
+& $LegacyCleanup
+if (-not $?) {
+    throw '旧方式の整理処理に失敗したぞ。'
 }
 #endregion
 
