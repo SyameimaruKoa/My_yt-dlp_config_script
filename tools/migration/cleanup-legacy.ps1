@@ -3,7 +3,7 @@
     Windowsの旧yt-dlp構成とGistクローンを整理する。
 .DESCRIPTION
     Linux由来の旧Gistクローン、以前のWindows用venv・更新スクリプト・字幕変換ツールを
-    検出して整理する。現行の.runtime/windowsと現行ジャンクションには手を触れない。
+    既知の旧配置先を変更の有無に関係なく削除する。現行の.runtime/windowsと現行ジャンクションは保持する。
 .PARAMETER DryRun
     検出結果と削除予定だけを表示する。
 .EXAMPLE
@@ -67,25 +67,6 @@ function Test-PlainDirectory {
     return ($null -ne $Item -and $Item.PSIsContainer -and -not $Item.LinkType)
 }
 
-function Invoke-LegacyGit {
-    param([string]$Directory, [string[]]$Arguments)
-    $PriorErrorAction = $ErrorActionPreference
-    $ErrorActionPreference = 'SilentlyContinue'
-    $Lines = @()
-    $ExitCode = 1
-    try {
-        $Lines = @(& git -C $Directory @Arguments 2>$null)
-        $ExitCode = $LASTEXITCODE
-    }
-    catch {
-        $Lines = @()
-    }
-    finally {
-        $ErrorActionPreference = $PriorErrorAction
-    }
-    return [pscustomobject]@{ Lines = $Lines; ExitCode = $ExitCode }
-}
-
 function Remove-EmptyLegacyParents {
     param([string[]]$Paths)
     if ($DryRun) { return }
@@ -125,141 +106,58 @@ if ($ConfigItem -and $ConfigItem.LinkType -eq 'SymbolicLink') {
 #endregion
 
 #region 以前のWindows専用ファイル
-if ((Test-PlainDirectory $OldVenv) -and
-    (Test-Path -LiteralPath (Join-Path $OldVenv 'pyvenv.cfg') -PathType Leaf) -and
-    (Test-Path -LiteralPath (Join-Path $OldVenv 'Scripts\yt-dlp.exe') -PathType Leaf)) {
-    Remove-LegacyPath $OldVenv '旧yt-dlp venv'
+if (Test-PlainDirectory $OldVenv) {
+    Remove-LegacyPath $OldVenv '旧yt-dlp venv（内容に関係なく削除）'
 }
-elseif (Test-Path -LiteralPath $OldVenv) {
-    Write-Output "保持（旧yt-dlp venvと確認できず）: $OldVenv"
+elseif (Get-Item -LiteralPath $OldVenv -Force -ErrorAction SilentlyContinue) {
+    Write-Output "保持（管理外のリンク）: $OldVenv"
 }
 else {
     Write-Output "対象なし（旧yt-dlp venv）: $OldVenv"
 }
-if ((Test-Path -LiteralPath $OldUpdater -PathType Leaf) -and
-    ((Get-Content -LiteralPath $OldUpdater -Raw -ErrorAction SilentlyContinue) -match 'yt-dlp-update.lock')) {
+if (Test-Path -LiteralPath $OldUpdater -PathType Leaf) {
     Remove-LegacyPath $OldUpdater '旧更新スクリプト'
-}
-elseif (Test-Path -LiteralPath $OldUpdater) {
-    Write-Output "保持（旧更新スクリプトと確認できず）: $OldUpdater"
 }
 else {
     Write-Output "対象なし（旧更新スクリプト）: $OldUpdater"
 }
 $OldConverter = Join-Path $OldConverterDir 'YTSubConverter.exe'
-if ((Test-PlainDirectory $OldConverterDir) -and (Test-Path -LiteralPath $OldConverter -PathType Leaf)) {
-    Remove-LegacyPath $OldConverter '旧字幕変換ツール'
-}
-elseif (Test-Path -LiteralPath $OldConverterDir) {
-    Write-Output "保持（旧字幕変換フォルダの内容を確認）: $OldConverterDir"
+if (Test-PlainDirectory $OldConverterDir) {
+    Remove-LegacyPath $OldConverterDir '旧字幕変換ツール（フォルダ全削除）'
 }
 else {
-    Write-Output "対象なし（旧字幕変換ツール）: $OldConverter"
+    Write-Output "対象なし（旧字幕変換ツール）: $OldConverterDir"
 }
 if (Test-PlainDirectory $OldBin) {
-    $Entries = @(Get-ChildItem -LiteralPath $OldBin -Force)
-    $Launcher = Join-Path $OldBin 'yt-dlp.cmd'
-    if ($Entries.Count -eq 1 -and $Entries[0].Name -eq 'yt-dlp.cmd' -and
-        -not $Entries[0].LinkType -and
-        (Select-String -LiteralPath $Launcher -SimpleMatch '%LOCALAPPDATA%\yt-dlp\venv\Scripts\python.exe' -Quiet)) {
-        Remove-LegacyPath $OldBin '旧yt-dlpコマンド'
-    }
-    else {
-        Write-Output "保持（現行リンクまたは管理外の起動ファイル）: $OldBin"
-    }
+    Remove-LegacyPath $OldBin '旧yt-dlp起動フォルダ（全削除）'
 }
-elseif (Test-Path -LiteralPath $OldBin) {
-    Write-Output "保持（現行リンクまたは管理外の起動先）: $OldBin"
+elseif (Get-Item -LiteralPath $OldBin -Force -ErrorAction SilentlyContinue) {
+    Write-Output "保持（現行ジャンクション）: $OldBin"
 }
 else {
     Write-Output "対象なし（旧起動フォルダ）: $OldBin"
 }
 if (Test-PlainDirectory $OldMpc) {
-    $Entries = @(Get-ChildItem -LiteralPath $OldMpc -Force)
-    $Shim = Join-Path $OldMpc 'yt-dlp.shim'
-    if ($Entries.Count -gt 0 -and
-        @($Entries | Where-Object { $_.PSIsContainer -or $_.LinkType -or $_.Name -notin @('yt-dlp.exe', 'yt-dlp.shim') }).Count -eq 0 -and
-        (Test-Path -LiteralPath $Shim -PathType Leaf) -and
-        ((Get-Content -LiteralPath $Shim -Raw) -match '--ignore-config')) {
-        Remove-LegacyPath $OldMpc '旧MPC-BE Shim'
-    }
-    else {
-        Write-Output "保持（管理外のMPC-BEファイル）: $OldMpc"
-    }
+    Remove-LegacyPath $OldMpc '旧MPC-BE Shim（フォルダ全削除）'
 }
-elseif (Test-Path -LiteralPath $OldMpc) {
-    Write-Output "保持（現行MPC-BEリンク）: $OldMpc"
+elseif (Get-Item -LiteralPath $OldMpc -Force -ErrorAction SilentlyContinue) {
+    Write-Output "保持（現行MPC-BEジャンクション）: $OldMpc"
 }
 else {
     Write-Output "対象なし（旧MPC-BE Shim）: $OldMpc"
 }
 #endregion
 
-#region Gist本体（Gitクローンは取得元・変更・未送信コミットを確認）
+#region Gist本体（指定された旧Gistは変更の有無にかかわらず全削除）
 foreach ($GistDir in $GistCandidates) {
-    if (-not (Test-Path -LiteralPath $GistDir) -and
-        -not (Get-Item -LiteralPath $GistDir -Force -ErrorAction SilentlyContinue)) {
+    $GistItem = Get-Item -LiteralPath $GistDir -Force -ErrorAction SilentlyContinue
+    if (-not $GistItem) {
         Write-Output "対象なし（旧Gist）: $GistDir"
         continue
     }
-    if (-not (Test-PlainDirectory $GistDir)) {
-        Write-Output "旧Gist保持（管理外のリンクまたはファイル）: $GistDir"
-        continue
-    }
-    $GitDir = Join-Path $GistDir '.git'
-    if (Test-PlainDirectory $GitDir) {
-        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-            Write-Output "旧Gist保持（gitが見つからない）: $GistDir"
-            continue
-        }
-        $RemoteResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('remote', 'get-url', 'origin')
-        $RootResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-parse', '--show-toplevel')
-        $Origin = [string]($RemoteResult.Lines | Select-Object -First 1)
-        $RootPath = [string]($RootResult.Lines | Select-Object -First 1)
-        $AllowedRemotes = @(
-            "https://gist.github.com/$GistId.git",
-            "https://gist.github.com/$GistId",
-            "git@gist.github.com:$GistId.git"
-        )
-        if ($RemoteResult.ExitCode -ne 0 -or $RootResult.ExitCode -ne 0 -or
-            $Origin -notin $AllowedRemotes -or
-            [IO.Path]::GetFullPath($RootPath).TrimEnd('\') -ine [IO.Path]::GetFullPath($GistDir).TrimEnd('\')) {
-            Write-Output "旧Gist保持（取得元が違う）: $GistDir"
-            continue
-        }
-        $StatusResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('status', '--porcelain', '--ignored', '--untracked-files=all')
-        $Status = @($StatusResult.Lines)
-        if ($StatusResult.ExitCode -ne 0 -or
-            @($Status | Where-Object { $_ -and $_ -ne '!! win yt-dlp config' -and $_ -ne '!! "win yt-dlp config"' }).Count -gt 0) {
-            Write-Output "旧Gist保持（編集・追加ファイルあり）: $GistDir"
-            continue
-        }
-        $UpstreamResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-parse', '--verify', '@{upstream}')
-        if ($UpstreamResult.ExitCode -ne 0) {
-            Write-Output "旧Gist保持（追跡先不明）: $GistDir"
-            continue
-        }
-        $AheadResult = Invoke-LegacyGit -Directory $GistDir -Arguments @('rev-list', '--count', '@{upstream}..HEAD')
-        $Ahead = [string]($AheadResult.Lines | Select-Object -First 1)
-        if ($AheadResult.ExitCode -ne 0 -or $Ahead -ne '0') {
-            Write-Output "旧Gist保持（未送信コミットあり）: $GistDir"
-            continue
-        }
-        Remove-LegacyPath $GistDir '旧Gistクローン'
-    }
-    else {
-        $Names = @(Get-ChildItem -LiteralPath $GistDir -Force)
-        $AllowedNames = @('.gitignore', 'yt-dlp config', 'z__convert_config.ps1',
-            'z__run_sub_converter.ps1', 'win yt-dlp config')
-        if ((Test-Path -LiteralPath (Join-Path $GistDir 'yt-dlp config') -PathType Leaf) -and
-            @($Names | Where-Object { $_.PSIsContainer -or $_.LinkType -or $_.Name -notin $AllowedNames }).Count -eq 0) {
-            Remove-LegacyPath $GistDir '旧Gist展開フォルダ'
-        }
-        else {
-            Write-Output "旧Gist保持（取得元や内容を確認できない）: $GistDir"
-        }
-    }
+    Remove-LegacyPath $GistDir '旧Gist（変更・未送信コミットを含め全削除）'
 }
+#endregion
 Remove-EmptyLegacyParents @(
     $OldConverterDir,
     (Join-Path $env:APPDATA 'yt-dlp\tools'),
