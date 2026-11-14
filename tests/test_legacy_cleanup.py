@@ -39,7 +39,7 @@ class LegacyCleanupTests(unittest.TestCase):
         return subprocess.run(args, env=self.env, check=True, text=True, capture_output=True)
 
     def test_clean_clone_removed_only_after_dry_run(self):
-        self.assertIn("旧Gist削除予定", self.cleanup(dry_run=True).stdout)
+        self.assertIn("旧Gist全削除予定", self.cleanup(dry_run=True).stdout)
         self.assertTrue(self.gist.exists())
         self.assertIn("旧Gist削除完了", self.cleanup().stdout)
         self.assertFalse(self.gist.exists())
