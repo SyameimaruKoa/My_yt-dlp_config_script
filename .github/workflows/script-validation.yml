@@ -176,6 +176,41 @@ jobs:
                       if (Test-Path -LiteralPath $gistPath) { Remove-Item -LiteralPath $gistPath -Recurse -Force }
                       if (Test-Path -LiteralPath $runtime) { Remove-Item -LiteralPath $runtime -Recurse -Force }
                   }
+            - name: Check Windows default full uninstall removes clean Git checkout
+              shell: powershell
+              run: |
+                  $source = Join-Path $env:RUNNER_TEMP 'full-uninstall-source'
+                  $remote = Join-Path $env:RUNNER_TEMP 'full-uninstall-remote.git'
+                  $checkout = Join-Path $env:RUNNER_TEMP 'full-uninstall-checkout'
+                  $oldLocal = $env:LOCALAPPDATA
+                  $oldApp = $env:APPDATA
+                  try {
+                      New-Item -ItemType Directory -Path (Join-Path $source 'tools\migration') -Force | Out-Null
+                      Copy-Item -LiteralPath 'uninstall_yt-dlp.ps1' -Destination $source
+                      Copy-Item -LiteralPath 'tools\migration\cleanup-legacy.ps1' -Destination (Join-Path $source 'tools\migration')
+                      Set-Content -LiteralPath (Join-Path $source '.gitignore') -Value '.runtime/' -Encoding ASCII
+                      & git init --bare --initial-branch=main $remote | Out-Null
+                      & git -C $source init --initial-branch=main | Out-Null
+                      & git -C $source add . | Out-Null
+                      & git -C $source -c user.name=CI -c user.email=ci@example.invalid commit -m initial | Out-Null
+                      & git -C $source remote add origin $remote | Out-Null
+                      & git -C $source push -u origin main | Out-Null
+                      & git clone $remote $checkout | Out-Null
+                      & git -C $checkout remote set-url origin 'https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git'
+                      $runtime = Join-Path $checkout '.runtime\windows\venv'
+                      New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $runtime 'pyvenv.cfg') -Value 'home = CI' -Encoding ASCII
+                      $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'full-uninstall-appdata\local'
+                      $env:APPDATA = Join-Path $env:RUNNER_TEMP 'full-uninstall-appdata\roaming'
+                      New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
+                      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $checkout 'uninstall_yt-dlp.ps1') | Out-Null
+                      if ($LASTEXITCODE -ne 0) { throw 'Full uninstall failed.' }
+                      if (Test-Path -LiteralPath $checkout) { throw 'Clean checkout was not removed by default.' }
+                  }
+                  finally {
+                      $env:LOCALAPPDATA = $oldLocal
+                      $env:APPDATA = $oldApp
+                  }
             - name: Check Windows uninstall discovery and dry-run
               shell: powershell
               run: |
