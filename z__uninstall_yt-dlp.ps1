@@ -211,6 +211,20 @@ if (Test-Path -LiteralPath $Runtime -PathType Container) {
         Write-Output "リポジトリ内の実行環境削除完了: $Runtime"
     }
 }
+if (-not $DryRun) {
+    foreach ($Folder in @(
+        (Join-Path $ConfigRoot 'tools\YTSubConverter'),
+        (Join-Path $ConfigRoot 'tools'),
+        $ConfigRoot,
+        $OldRoot
+    )) {
+        if ((Test-Path -LiteralPath $Folder -PathType Container) -and
+            @(Get-ChildItem -LiteralPath $Folder -Force).Count -eq 0) {
+            [System.IO.Directory]::Delete($Folder)
+            Write-Output "空の旧フォルダ削除: $Folder"
+        }
+    }
+}
 if ($RemoveRepository) {
     if (-not (Get-Command git -ErrorAction SilentlyContinue) -or
         -not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
