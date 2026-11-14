@@ -21,6 +21,7 @@ class LegacyCleanupTests(unittest.TestCase):
         self.git("init", "--bare", "-b", "main", str(self.remote))
         self.git("init", "-b", "main", str(source))
         (source / "yt-dlp config").write_text("test config\n", encoding="utf-8")
+        (source / ".gitignore").write_text("win yt-dlp config\n", encoding="utf-8")
         self.git("-C", str(source), "add", ".")
         self.git("-C", str(source), "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-m", "initial")
         self.git("-C", str(source), "remote", "add", "origin", str(self.remote))
@@ -44,12 +45,7 @@ class LegacyCleanupTests(unittest.TestCase):
         self.assertFalse(self.gist.exists())
 
     def test_known_ignored_generated_config_is_removed(self):
-        (self.gist / ".gitignore").write_text("win yt-dlp config\\n", encoding="utf-8")
-        self.git("-C", str(self.gist), "add", ".gitignore")
-        self.git("-C", str(self.gist), "-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
-                 "commit", "-m", "ignore-generated")
-        self.git("-C", str(self.gist), "push", "https://gist.github.com/21141912fbacf40877f4cf877577e082.git")
-        (self.gist / "win yt-dlp config").write_text("generated\\n", encoding="utf-8")
+        (self.gist / "win yt-dlp config").write_text("generated\n", encoding="utf-8")
         self.assertIn("旧Gist削除完了", self.cleanup().stdout)
         self.assertFalse(self.gist.exists())
 
