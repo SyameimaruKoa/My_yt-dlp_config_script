@@ -135,6 +135,7 @@ jobs:
                       & git init --bare --initial-branch=main $remote | Out-Null
                       & git -C $source init --initial-branch=main | Out-Null
                       Set-Content -LiteralPath (Join-Path $source 'yt-dlp config') -Value 'legacy' -Encoding ASCII
+                      Set-Content -LiteralPath (Join-Path $source '.gitignore') -Value 'win yt-dlp config' -Encoding ASCII
                       & git -C $source add . | Out-Null
                       & git -C $source -c user.name=CI -c user.email=ci@example.invalid commit -m initial | Out-Null
                       & git -C $source remote add origin $remote | Out-Null
@@ -147,6 +148,15 @@ jobs:
                       if (Test-Path -LiteralPath $gistPath) { throw 'Clean Gist clone was not removed.' }
                       & git clone $remote $gistPath | Out-Null
                       & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      Set-Content -LiteralPath (Join-Path $gistPath 'win yt-dlp config') -Value 'generated' -Encoding ASCII
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (Test-Path -LiteralPath $gistPath) { throw 'Gist with known ignored config was not removed.' }
+                      & git clone $remote $gistPath | Out-Null
+                      & git -C $gistPath remote set-url origin "https://gist.github.com/$gistId.git"
+                      & git -C $gistPath checkout --detach HEAD | Out-Null
+                      .\tools\migration\cleanup-legacy.ps1 | Out-Null
+                      if (-not (Test-Path -LiteralPath $gistPath)) { throw 'Detached Gist clone was removed.' }
+                      & git -C $gistPath switch main | Out-Null
                       Set-Content -LiteralPath (Join-Path $gistPath 'private.txt') -Value 'keep' -Encoding ASCII
                       .\tools\migration\cleanup-legacy.ps1 | Out-Null
                       if (-not (Test-Path -LiteralPath (Join-Path $gistPath 'private.txt'))) { throw 'Dirty Gist clone was removed.' }
