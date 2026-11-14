@@ -190,7 +190,9 @@ cleanup_legacy_runtime() {
     if [ -d "$old_checkout/.git" ] && [ ! -L "$old_checkout" ] &&
        [ "$(readlink -f "$old_checkout")" != "$active_checkout" ] &&
        [ "$(git -C "$old_checkout" remote get-url origin 2>/dev/null || true)" = "https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git" ] &&
-       [ -z "$(git -C "$old_checkout" status --porcelain --untracked-files=all 2>/dev/null)" ]; then
+       [ -z "$(git -C "$old_checkout" status --porcelain --untracked-files=all 2>/dev/null)" ] &&
+       git -C "$old_checkout" rev-parse --verify '@{upstream}' > /dev/null 2>&1 &&
+       [ "$(git -C "$old_checkout" rev-list --count '@{upstream}..HEAD' 2>/dev/null)" = 0 ]; then
         if [ "$dry_run" = true ]; then
             printf '旧リポジトリの重複クローン削除予定: %s\n' "$old_checkout"
         else
