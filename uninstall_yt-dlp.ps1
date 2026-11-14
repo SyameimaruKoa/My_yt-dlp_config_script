@@ -2,14 +2,18 @@
 .SYNOPSIS
     yt-dlpのLinux/Windows共通リポジトリ管理方式からWindows環境をアンインストールする。
 .DESCRIPTION
-    リポジトリ内venv、起動ラッパー、MPC-BE専用Shim、Deno、字幕変換ツール、
-    設定ファイル、歴代セットアップで生成した旧ファイルを整理する。
+    既定では現行・旧方式の実行環境、起動リンク、設定、Gistクローンを削除し、
+    Git作業ツリーも安全に削除できる場合は削除する。
+    --cleanup-onlyで旧方式のみ整理し、現行の仮想環境・設定・リンクを維持する。
+    --dry-runですべての判定を表示し、削除は行わない。
 .EXAMPLE
     .\uninstall_yt-dlp.ps1 --dry-run
 .EXAMPLE
     .\uninstall_yt-dlp.ps1
+ .EXAMPLE
+    .\uninstall_yt-dlp.ps1 --cleanup-only
 .EXAMPLE
-    .\uninstall_yt-dlp.ps1 --remove-repository
+    .\uninstall_yt-dlp.ps1 --keep-repository
 .EXAMPLE
     .\uninstall_yt-dlp.ps1 --help
 .NOTES
@@ -18,7 +22,8 @@
 
 #region 引数とヘルプ
 $DryRun = $false
-$RemoveRepository = $false
+$RemoveRepository = $true
+$CleanupOnly = $false
 foreach ($Argument in $args) {
     switch ($Argument.ToLowerInvariant()) {
         { $_ -in @('-h', '--help', '-help') } {
@@ -26,7 +31,9 @@ foreach ($Argument in $args) {
             exit 0
         }
         '--dry-run' { $DryRun = $true }
+        '--cleanup-only' { $CleanupOnly = $true }
         '--remove-repository' { $RemoveRepository = $true }
+        '--keep-repository' { $RemoveRepository = $false }
         default {
             Write-Error "不明な引数: $Argument"
             Get-Help -Detailed $MyInvocation.MyCommand.Path
@@ -48,6 +55,37 @@ $MpcLink = Join-Path $env:APPDATA 'MPC-BE\yt-dlp'
 $LegacyVenv = Join-Path $OldRoot 'venv'
 $LegacyUpdater = Join-Path $OldRoot 'auto_update.py'
 $LegacyConverter = Join-Path $ConfigRoot 'tools\YTSubConverter\YTSubConverter.exe'
+$LegacyCleanup = Join-Path $Root 'tools\migration\cleanup-legacy.ps1'
+if (-not (Test-Path -LiteralPath $LegacyCleanup -PathType Leaf)) {
+    throw "旧方式の整理スクリプトが見つからん: $LegacyCleanup"
+}
+if ($CleanupOnly) {
+    if (-not (Test-Path -LiteralPath (Join-Path $Runtime 'venv\Scripts\python.exe') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $Runtime 'bin\yt-dlp.cmd') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $ConfigLink -PathType Leaf)) {
+        throw '現行方式のセットアップが未完了じゃ。setup_yt-dlp.ps1を実行してから--cleanup-onlyを使うのじゃ。'
+    }
+    if ($DryRun) {
+        & $LegacyCleanup --dry-run
+    }
+    else {
+        & $LegacyCleanup
+    }
+    if (-not $?) {
+        throw '旧方式の整理に失敗したぞ。'
+    }
+    Write-Output '旧方式だけ整理したぞ。現行のvenv・起動リンク・設定・Gitリポジトリは保持した。'
+    return
+}
+if ($DryRun) {
+    & $LegacyCleanup --dry-run
+}
+else {
+    & $LegacyCleanup
+}
+if (-not $?) {
+    throw '旧方式の整理に失敗したぞ。'
+}
 #endregion
 
 #region 削除関数
@@ -286,7 +324,13 @@ if ($RemoveRepository) {
         Write-Output "リポジトリ削除予定: $Root"
     }
     else {
-        Remove-Item -LiteralPath $Root -Recurse -Force
+        $CurrentLocation = (Get-Location).ProviderPath
+        $NormalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+        if ($CurrentLocation -ieq $NormalizedRoot -or
+            $CurrentLocation.StartsWith($NormalizedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
+        }
+        Remove-Item -LiteralPath $Root -Recurse -Force -ErrorAction Stop
         Write-Output "リポジトリ削除完了: $Root"
     }
     }
@@ -324,5 +368,5 @@ foreach ($Candidate in $LikelyStandalone) {
 }
 #endregion
 
-Write-Output 'アンインストール確認が完了したぞ。対象なしと表示された項目は削除しておらぬ。'
+Write-Output '完全アンインストール処理が完了したぞ。保持と表示された項目は削除しておらぬ。'
 #endregion
