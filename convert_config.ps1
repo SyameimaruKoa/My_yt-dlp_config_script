@@ -8,7 +8,7 @@
     3. Windows用 --exec (プレースホルダー %SCRIPT_DIR% を含む行) を
        コメント解除し、パスを $PSScriptRoot に置換
 .EXAMPLE
-    .\z__convert_config.ps1
+    .\convert_config.ps1
 .NOTES
     文字コード: UTF-8 BOM で保存
 #>
@@ -33,7 +33,7 @@ $LinuxExecMarker = ".sh "
 
 #region 変換処理
 
-Write-Output "PowerShell 変換ロジック (z__convert_config.ps1) を実行中..."
+Write-Output "PowerShell 変換ロジック (convert_config.ps1) を実行中..."
 Write-Output "入力: $InputFile"
 Write-Output "出力: $OutputFile"
 Write-Output "スクリプト配置場所 (置換パス): $ScriptDirectory"
