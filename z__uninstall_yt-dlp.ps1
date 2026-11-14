@@ -86,9 +86,9 @@ function Remove-OwnedJunction {
         Write-Output "保持（管理外のパス）: $Link"
         return
     }
-    $Files = @(Get-ChildItem -LiteralPath $Link -Recurse -File -Force)
+    $Files = @(Get-ChildItem -LiteralPath $Link -Force)
     $Allowed = if ($Kind -eq 'bin') { @('yt-dlp.cmd') } else { @('yt-dlp.exe', 'yt-dlp.shim') }
-    if (@($Files | Where-Object { $_.Name -notin $Allowed }).Count -gt 0) {
+    if (@($Files | Where-Object { $_.PSIsContainer -or $_.LinkType -or $_.Name -notin $Allowed }).Count -gt 0) {
         Write-Output "保持（管理外のファイルあり）: $Link"
         return
     }
