@@ -43,6 +43,16 @@ class LegacyCleanupTests(unittest.TestCase):
         self.assertIn("旧Gist削除完了", self.cleanup().stdout)
         self.assertFalse(self.gist.exists())
 
+    def test_known_ignored_generated_config_is_removed(self):
+        (self.gist / ".gitignore").write_text("win yt-dlp config\\n", encoding="utf-8")
+        self.git("-C", str(self.gist), "add", ".gitignore")
+        self.git("-C", str(self.gist), "-c", "user.name=CI", "-c", "user.email=ci@example.invalid",
+                 "commit", "-m", "ignore-generated")
+        self.git("-C", str(self.gist), "push", "https://gist.github.com/21141912fbacf40877f4cf877577e082.git")
+        (self.gist / "win yt-dlp config").write_text("generated\\n", encoding="utf-8")
+        self.assertIn("旧Gist削除完了", self.cleanup().stdout)
+        self.assertFalse(self.gist.exists())
+
     def test_modified_file_is_preserved(self):
         (self.gist / "yt-dlp config").write_text("local change\n", encoding="utf-8")
         self.assertIn("旧Gist保持", self.cleanup().stdout)
