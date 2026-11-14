@@ -12,7 +12,9 @@ jobs:
             - name: Check Bash syntax and help
               shell: bash
               run: |
-                  bash -n z__setup_yt-dlp.sh z__run_sub_converter.sh
+                  bash -n z__setup_yt-dlp.sh z__uninstall_yt-dlp.sh z__run_sub_converter.sh
+                  bash z__uninstall_yt-dlp.sh --help
+                  bash z__uninstall_yt-dlp.sh --dry-run
                   bash z__setup_yt-dlp.sh --help
                   bash z__run_sub_converter.sh --help
                   bash -n tools/migration/remove-standalone.sh
@@ -52,6 +54,8 @@ jobs:
                       if ($parseErrors.Count -gt 0) { throw "$($file.Name): $parseErrors" }
                   }
                   .\z__setup_yt-dlp.ps1 --help | Out-Null
+                  .\z__uninstall_yt-dlp.ps1 --help | Out-Null
+                  .\z__uninstall_yt-dlp.ps1 --dry-run | Out-Null
                   .\z__convert_config.ps1 --help | Out-Null
                   .\z__run_sub_converter.ps1 -Help | Out-Null
                   .\z__convert_config.ps1 | Out-Null
