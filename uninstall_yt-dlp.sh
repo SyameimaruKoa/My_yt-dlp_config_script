@@ -9,7 +9,7 @@ show_help() {
         bash uninstall_yt-dlp.sh -h | --help
 
 既定は現行の起動リンク・venv・設定・字幕変換ツール・Deno・Proton Prefix、
-旧Gistなどの旧方式を削除し、変更のないGitクローンも削除する。
+旧Gistなどの旧方式を削除し、変更の有無に関係なくGitクローンも削除する。
 --cleanup-onlyは旧方式だけを整理し、現行方式の実体とリンクを残す。
 
 オプション:
@@ -55,15 +55,9 @@ delete_file() {
 }
 
 delete_link_if_owned() {
-    local link="$1" expected="$2" alternate="${3:-}" elevate="${4:-false}" destination
-    if [ ! -L "$link" ]; then
-        return
-    fi
-    destination=$(readlink -f "$link" 2>/dev/null || true)
-    if [ "$destination" = "$expected" ] || { [ -n "$alternate" ] && [ "$destination" = "$alternate" ]; }; then
+    local link="$1" expected="$2" alternate="${3:-}" elevate="${4:-false}"
+    if [ -L "$link" ]; then
         delete_file "$link" "$elevate"
-    else
-        printf '保持（管理外のリンク）: %s -> %s\n' "$link" "$destination"
     fi
 }
 
@@ -191,28 +185,12 @@ if [ "$dry_run" = false ]; then
 fi
 
 if [ "$remove_repository" = true ]; then
-    if [ ! -d "$ROOT/.git" ] || [ -L "$ROOT/.git" ] ||
-       ! command -v git >/dev/null 2>&1; then
-        printf 'リポジトリ保持（Gitクローンと確認できず）: %s\n' "$ROOT"
-    elif [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=all 2>/dev/null)" ]; then
-        printf 'リポジトリ保持（作業ツリーに変更あり）: %s\n' "$ROOT"
+    if [ "$dry_run" = true ]; then
+        printf '現行リポジトリ全削除予定（編集・未送信コミットを含む）: %s\n' "$ROOT"
     else
-        remote=$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)
-        case "$remote" in
-            https://github.com/SyameimaruKoa/My_yt-dlp_config_script|https://github.com/SyameimaruKoa/My_yt-dlp_config_script.git|git@github.com:SyameimaruKoa/My_yt-dlp_config_script.git)
-                if ! git -C "$ROOT" rev-parse --verify '@{upstream}' >/dev/null 2>&1 ||
-                   [ "$(git -C "$ROOT" rev-list --count '@{upstream}..HEAD' 2>/dev/null || printf unknown)" != 0 ]; then
-                    printf 'リポジトリ保持（未送信コミットまたは追跡先不明）: %s\n' "$ROOT"
-                elif [ "$dry_run" = true ]; then
-                    printf 'リポジトリ削除予定: %s\n' "$ROOT"
-                else
-                    cd -- "$HOME"
-                    rm -rf -- "$ROOT"
-                    printf 'リポジトリ削除完了: %s\n' "$ROOT"
-                fi
-                ;;
-            *) printf 'リポジトリ保持（取得元が不明）: %s\n' "$ROOT" ;;
-        esac
+        cd -- "$HOME"
+        rm -rf -- "$ROOT"
+        printf '現行リポジトリ全削除完了: %s\n' "$ROOT"
     fi
 else
     printf 'リポジトリ保持（--keep-repository指定）: %s\n' "$ROOT"
