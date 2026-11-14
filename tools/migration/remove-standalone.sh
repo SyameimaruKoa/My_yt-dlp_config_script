@@ -3,7 +3,7 @@ set -euo pipefail
 
 show_help() {
     cat <<'EOF_HELP'
-使用法: remove-standalone.sh [--dry-run] [--path ファイル] [--legacy-gist]
+使用法: remove-standalone.sh [--dry-run] [--path ファイル] [--legacy-gist] [--legacy-runtime]
         remove-standalone.sh -h | --help
 
 旧yt-dlp単独実行ファイルを削除するのじゃ。
@@ -13,6 +13,7 @@ yt-dlpのZIP形式単独配布ファイルだけを削除し、新しいラッ�
 オプション:
   --path ファイル    指定したファイルだけを確認（繰り返し指定可能）
   --legacy-gist      旧Gistクローンも確認し、不要なら削除
+  --legacy-runtime   移行後の旧venv・旧更新スクリプト等を整理
   --dry-run          削除せず確認結果を表示
   -h, --help         このヘルプを表示
 EOF_HELP
@@ -20,6 +21,7 @@ EOF_HELP
 
 dry_run=false
 cleanup_gist=false
+cleanup_runtime=false
 declare -a explicit_paths=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -33,6 +35,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --legacy-gist)
             cleanup_gist=true
+            shift
+            ;;
+        --legacy-runtime)
+            cleanup_runtime=true
             shift
             ;;
         --path)
@@ -73,11 +79,17 @@ PY
 
 for target in "${targets[@]}"; do
     if [ -L "$target" ]; then
-        printf '保持（シンボリックリンク）: %s\n' "$target"
+        if [ "$(readlink -f "$target" 2>/dev/null || true)" = "$(readlink -f "$(dirname "$0")/../../.runtime/linux/bin/yt-dlp" 2>/dev/null || true)" ]; then
+            printf '移行完了（リポジトリ内のpip版ラッパーへリンク済み）: %s\n' "$target"
+        else
+            printf '保持（別のシンボリックリンク）: %s\n' "$target"
+        fi
     elif [ ! -f "$target" ]; then
         printf '対象なし: %s\n' "$target"
+    elif grep -Fq '# yt-dlp venv wrapper' "$target" 2>/dev/null; then
+        printf '移行済み（pip版の起動ラッパー）: %s\n' "$target"
     elif [ "$(basename "$target")" != "yt-dlp" ] || ! is_standalone_zipapp "$target"; then
-        printf '保持（単独実行ファイルではない）: %s\n' "$target"
+        printf '保持（管理対象の旧バイナリではない）: %s\n' "$target"
     elif [ "$dry_run" = true ]; then
         printf '削除予定: %s\n' "$target"
     elif [ -w "$target" ] && [ -w "$(dirname "$target")" ]; then
@@ -135,4 +147,56 @@ cleanup_legacy_gist() {
 
 if [ "$cleanup_gist" = true ]; then
     cleanup_legacy_gist
+fi
+
+cleanup_legacy_runtime() {
+    local legacy_root="${XDG_DATA_HOME:-$HOME/.local/share}/yt-dlp"
+    local old_venv="$legacy_root/venv"
+    local old_updater="$legacy_root/auto_update.py"
+    local old_prefix="$legacy_root/proton-prefix"
+    local old_deno="$HOME/.deno/bin/deno"
+    local target
+
+    if [ -d "$old_venv" ] && [ ! -L "$old_venv" ] &&
+       [ -f "$old_venv/pyvenv.cfg" ] && [ -x "$old_venv/bin/python" ]; then
+        if [ "$dry_run" = true ]; then
+            printf '旧venv削除予定: %s\n' "$old_venv"
+        else
+            rm -rf -- "$old_venv"
+            printf '旧venv削除完了: %s\n' "$old_venv"
+        fi
+    fi
+    if [ -f "$old_updater" ] && [ ! -L "$old_updater" ] &&
+       grep -Fq 'yt-dlp-update.lock' "$old_updater"; then
+        if [ "$dry_run" = true ]; then
+            printf '旧更新スクリプト削除予定: %s\n' "$old_updater"
+        else
+            rm -f -- "$old_updater"
+            printf '旧更新スクリプト削除完了: %s\n' "$old_updater"
+        fi
+    fi
+    if [ -d "$old_prefix" ] && [ ! -L "$old_prefix" ] &&
+       { [ -f "$old_prefix/system.reg" ] || [ -f "$old_prefix/user.reg" ]; }; then
+        if [ "$dry_run" = true ]; then
+            printf '旧Proton Prefix削除予定: %s\n' "$old_prefix"
+        else
+            rm -rf -- "$old_prefix"
+            printf '旧Proton Prefix削除完了: %s\n' "$old_prefix"
+        fi
+    fi
+    target=$(readlink -f "$HOME/.local/bin/deno" 2>/dev/null || true)
+    if [ -f "$old_deno" ] && [ ! -L "$old_deno" ] &&
+       [ "$target" != "$(readlink -f "$old_deno")" ]; then
+        if [ "$dry_run" = true ]; then
+            printf '旧Deno本体削除予定: %s\n' "$old_deno"
+        else
+            rm -f -- "$old_deno"
+            rmdir "$HOME/.deno/bin" "$HOME/.deno" 2>/dev/null || true
+            printf '旧Deno本体削除完了: %s\n' "$old_deno"
+        fi
+    fi
+}
+
+if [ "$cleanup_runtime" = true ]; then
+    cleanup_legacy_runtime
 fi
