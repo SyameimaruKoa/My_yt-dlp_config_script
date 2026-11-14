@@ -8,9 +8,9 @@ yt-dlp Nightlyと追加ツールのセットアップ、およびWindows・Linux
 | --- | --- | --- |
 | Ubuntu 24.04 / 26.04、Debian 12 / 13（amd64） | `setup_yt-dlp.sh` | apt / Deno公式インストーラー / UMU |
 | Bazzite | `setup_yt-dlp.sh` | Homebrew / Deno公式インストーラー / インストール済みProton |
-| Windows 10 / 11 | `setup_yt-dlp.ps1` | winget（ffmpeg・aria2） / Deno ZIP |
+| Windows 10 / 11 | `setup_yt-dlp.ps1` | venvのpip（ffmpeg未導入時） / aria2公式ZIP（未導入時） / Deno ZIP |
 
-Python 3.11以上が必要じゃ。WindowsではPythonとwingetを準備しておくのじゃ。
+Python 3.11以上が必要じゃ。WindowsではPythonを準備しておくのじゃ。
 
 ## インストール・更新
 
@@ -43,7 +43,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup_yt-dlp.ps1
 自動で導入・設定されるもの：
 
 - yt-dlp Nightlyと追加Pythonパッケージ（仮想環境内）
-- ffmpeg、aria2（不足時にwingetで導入）、Deno（リポジトリ内に配置）
+- 既存のffmpeg・ffprobeがあれば流用。足りなければvenv内のpipで`static-ffmpeg`を導入し、両実行ファイルを`.runtime/windows/bin`へリンクまたは配置
+- aria2cがなければSHA-256を検証した公式ZIPから`.runtime/windows/bin`へ配置。Denoもリポジトリ内へ配置
 - YTSubConverter.exe（`YTSC_PATH`へ登録）
 - `yt-dlp config`から変換したWindows用設定（`%APPDATA%\yt-dlp\config`）
 - `yt-dlp.cmd`とユーザーPATH（起動用ディレクトリはジャンクション）
@@ -72,7 +73,7 @@ MPC-BE側の「実行可能ファイル」には`%APPDATA%\MPC-BE\yt-dlp\yt-dlp.
 | Linux | `<リポジトリ>/.runtime/linux/venv` | `~/.local/bin/yt-dlp`（Ubuntu/Debianでは`/usr/local/bin/yt-dlp`もリンク） |
 | Windows | `<リポジトリ>/.runtime/windows/venv` | `%LOCALAPPDATA%\yt-dlp\bin\yt-dlp.cmd`（ジャンクション経由） |
 
-通常の `yt-dlp` コマンドが仮想環境のPythonを直接呼び出すため、`activate`は不要じゃ。システム全体のpip環境にはインストールしないぞ。`.runtime/`はGitの管理対象外じゃ。OS共用の依存パッケージ（apt / brew / winget）はシステム側へ配置される。
+通常の `yt-dlp` コマンドが仮想環境のPythonを直接呼び出すため、`activate`は不要じゃ。システム全体のpip環境にはインストールしないぞ。`.runtime/`はGitの管理対象外じゃ。OS共用の依存パッケージ（apt / brew）はシステム側へ配置される。Windowsでは既存のffmpeg・ffprobe・aria2cを優先して使用し、必要時のみリポジトリ内へ追加する。
 
 導入するpip extras：
 
