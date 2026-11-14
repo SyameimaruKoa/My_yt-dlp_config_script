@@ -8,7 +8,7 @@ yt-dlp Nightlyと追加ツールのセットアップ、およびWindows・Linux
 | --- | --- | --- |
 | Ubuntu 24.04 / 26.04、Debian 12 / 13（amd64） | `z__setup_yt-dlp.sh` | apt / Deno公式インストーラー / UMU |
 | Bazzite | `z__setup_yt-dlp.sh` | Homebrew / Deno公式インストーラー / インストール済みProton |
-| Windows 10 / 11 | `z__setup_yt-dlp.ps1` | winget |
+| Windows 10 / 11 | `z__setup_yt-dlp.ps1` | winget（ffmpeg・aria2） / Deno ZIP |
 
 Python 3.11以上が必要じゃ。WindowsではPythonとwingetを準備しておくのじゃ。
 
@@ -24,7 +24,7 @@ bash z__setup_yt-dlp.sh
 
 yt-dlpとpip依存パッケージは、通常の`yt-dlp`コマンドを実行するたびに更新確認するのじゃ。セットアップスクリプト・設定を更新したい場合は、リポジトリで`git pull --ff-only`を実行してセットアップを再実行するぞ。
 
-セットアップではffmpeg・aria2・Gitなどを準備し、yt-dlp NightlyとPython追加パッケージを仮想環境にインストールする。DenoとYTSubConverter.exeも配置するぞ。字幕変換はUMU / Proton経由で動作し、Bazziteでは既存のProtonを優先するのじゃ。`PROTON_PATH`で選択を上書きできる。
+セットアップではffmpeg・aria2・Gitなどを準備し、yt-dlp NightlyとPython追加パッケージを**リポジトリ内の仮想環境**にインストールする。DenoとYTSubConverter.exe、Proton Prefixもリポジトリ内に配置するぞ。字幕変換はUMU / Proton経由で動作し、Bazziteでは既存のProtonを優先するのじゃ。`PROTON_PATH`で選択を上書きできる。
 
 ```bash
 PROTON_PATH="/path/to/Proton" bash z__setup_yt-dlp.sh
@@ -43,10 +43,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\z__setup_yt-dlp.ps1
 自動で導入・設定されるもの：
 
 - yt-dlp Nightlyと追加Pythonパッケージ（仮想環境内）
-- ffmpeg、aria2、Deno（不足時にwingetで導入）
+- ffmpeg、aria2（不足時にwingetで導入）、Deno（リポジトリ内に配置）
 - YTSubConverter.exe（`YTSC_PATH`へ登録）
 - `yt-dlp config`から変換したWindows用設定（`%APPDATA%\yt-dlp\config`）
-- `yt-dlp.cmd`とユーザーPATH
+- `yt-dlp.cmd`とユーザーPATH（起動用ディレクトリはジャンクション）
 - MPC-BEが検出された場合は専用`yt-dlp.exe`を自動生成（通常のyt-dlp設定は変更しない）
 
 yt-dlpとpip依存パッケージの更新確認は、`yt-dlp`起動時に毎回自動実行される。セットアップ内容を更新する場合は、スクリプトを再実行するのじゃ。PATHの変更は新しいターミナルから有効になるぞ。
@@ -62,17 +62,17 @@ MPC-BEが検出された場合、セットアップ時に次のファイルを�
 
 MPC-BE側の「実行可能ファイル」には`%APPDATA%\MPC-BE\yt-dlp\yt-dlp.exe`のフルパスを指定する。既に同じパスを設定していれば変更不要じゃ。
 
-専用Shimはpip仮想環境の`Scripts\yt-dlp.exe`を呼び出し、`--ignore-config`を強制する。起動時のpip更新確認も実行し、通常の`yt-dlp`設定や`Register-CUIApplicationPath.ps1`は変更せんぞ。MPC-BEが未検出なら専用Shimは作成しない。
+専用Shimの実体はリポジトリ内の`.runtime/windows/mpc-be/`に置き、上記ディレクトリからジャンクションで参照する。pip仮想環境の`Scripts\yt-dlp.exe`を呼び出し、`--ignore-config`を強制する。起動時のpip更新確認も実行し、通常の`yt-dlp`設定や`Register-CUIApplicationPath.ps1`は変更せんぞ。MPC-BEが未検出なら専用Shimは作成しない。
 
 
 ## Python仮想環境
 
 | OS | 保存先 | `yt-dlp`の起動方法 |
 | --- | --- | --- |
-| Linux | `~/.local/share/yt-dlp/venv`（`XDG_DATA_HOME`を指定した場合はその下） | `~/.local/bin/yt-dlp`（Ubuntu/Debianでは`/usr/local/bin/yt-dlp`も登録） |
-| Windows | `%LOCALAPPDATA%\yt-dlp\venv` | `%LOCALAPPDATA%\yt-dlp\bin\yt-dlp.cmd` |
+| Linux | `<リポジトリ>/.runtime/linux/venv` | `~/.local/bin/yt-dlp`（Ubuntu/Debianでは`/usr/local/bin/yt-dlp`もリンク） |
+| Windows | `<リポジトリ>/.runtime/windows/venv` | `%LOCALAPPDATA%\\yt-dlp\\bin\\yt-dlp.cmd`（ジャンクション経由） |
 
-通常の `yt-dlp` コマンドが仮想環境のPythonを直接呼び出すため、`activate`は不要じゃ。システム全体のpip環境にはインストールしないぞ。
+通常の `yt-dlp` コマンドが仮想環境のPythonを直接呼び出すため、`activate`は不要じゃ。システム全体のpip環境にはインストールしないぞ。`.runtime/`はGitの管理対象外じゃ。OS共用の依存パッケージ（apt / brew / winget）はシステム側へ配置される。
 
 導入するpip extras：
 
@@ -109,18 +109,40 @@ Remove-Item Env:YT_DLP_SKIP_UPDATE
 
 ## 旧方式からの自動移行と削除
 
-Linuxセットアップ完了時に`tools/migration/remove-standalone.sh --legacy-gist`を実行する。旧方式で配置した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`はpip仮想環境用ラッパーに置換され、残ったZIP形式の単独配布ファイルも確認する。**新ラッパーは削除しない**。
+Linuxセットアップ完了時に`tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime`を実行する。旧方式で配置した`~/.local/bin/yt-dlp`と`/usr/local/bin/yt-dlp`はリポジトリ内のpip仮想環境用ラッパーへのシンボリックリンクに置換される。旧venv・旧更新スクリプト・旧Proton Prefix・旧Deno本体を検出して整理し、新ラッパーは残すぞ。
 
-旧方式で設定ファイルを取得していた`~/21141912fbacf40877f4cf877577e082`も、正しいGistのクローンで、ローカル変更・追加ファイル・未送信コミットがない場合だけ自動削除する。条件に合わない場合は保持するぞ。Windowsでは旧方式のLinux用Gistクローンは使用しない。
+旧方式で設定ファイルを取得していた`~/21141912fbacf40877f4cf877577e082`も、正しいGistのクローンで、ローカル変更・追加ファイル・未送信コミットがない場合だけ自動削除する。条件に合わない場合は保持するぞ。Windowsでは旧方式のLinux用Gistクローンは使用しない。旧Windows venv・自動更新スクリプト・字幕変換ツール・MPC-BE Shimは、新しいリポジトリ内の実体へ移行した後に整理する。
 
 削除対象を事前に確認する場合や、手動で再実行する場合は以下じゃ。
 
 ```bash
-bash tools/migration/remove-standalone.sh --legacy-gist --dry-run
-bash tools/migration/remove-standalone.sh --legacy-gist
+bash tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime --dry-run
+bash tools/migration/remove-standalone.sh --legacy-gist --legacy-runtime
 ```
 
 別の場所のyt-dlp単独版を調べる場合は`--path /path/to/yt-dlp`を指定するのじゃ。
+
+## アンインストール
+
+インストールで作ったリポジトリ内の実行環境とリンク、歴代の旧方式によるファイルを削除する。必要なら`--remove-repository`でGit作業ツリー自体も削除できる（未コミットの変更がある場合は保持）。`--dry-run`では削除せず結果を確認できるぞ。
+
+**Linux**
+
+```bash
+bash z__uninstall_yt-dlp.sh --dry-run
+bash z__uninstall_yt-dlp.sh
+bash z__uninstall_yt-dlp.sh --remove-repository
+```
+
+**Windows（PowerShell）**
+
+```powershell
+.\z__uninstall_yt-dlp.ps1 --dry-run
+.\z__uninstall_yt-dlp.ps1
+.\z__uninstall_yt-dlp.ps1 --remove-repository
+```
+
+OS共用の依存パッケージ（ffmpeg・aria2・Git・Python・curlなど）は、他の用途でも使用するため一括削除しない。旧方式が導入したものとユーザーが既に導入していたものは、インストール時の記録がない限り区別できないのじゃ。
 
 ## 使用方法
 
@@ -145,12 +167,14 @@ Windowsでも同じ`yt-dlp`コマンドで使用できるのじゃ。コマン�
 
 ```bash
 bash z__setup_yt-dlp.sh --help
+bash z__uninstall_yt-dlp.sh --help
 bash z__run_sub_converter.sh --help
 bash tools/migration/remove-standalone.sh --help
 ```
 
 ```powershell
 .\z__setup_yt-dlp.ps1 --help
+.\z__uninstall_yt-dlp.ps1 --help
 .\z__convert_config.ps1 --help
 .\z__run_sub_converter.ps1 -Help
 ```
