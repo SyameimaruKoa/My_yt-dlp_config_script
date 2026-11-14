@@ -148,6 +148,7 @@ if ($Config) {
 else {
     Write-Output "対象なし（設定）: $ConfigLink"
 }
+$PreserveRuntime = $false
 $LegacyBackup = Join-Path $Runtime 'legacy-config.backup'
 if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
     if ($DryRun) {
@@ -158,7 +159,8 @@ if (Test-Path -LiteralPath $LegacyBackup -PathType Leaf) {
         Write-Output "元の設定を復元したぞ: $ConfigLink"
     }
     else {
-        Write-Output "保持（復元先に別の設定が存在）: $LegacyBackup"
+        $PreserveRuntime = $true
+        Write-Output "保持（復元先に別の設定が存在し、旧設定を保存）: $LegacyBackup"
     }
 }
 else {
@@ -237,7 +239,10 @@ else {
     Write-Output "対象なし（生成設定ファイル）: $GeneratedConfig"
 }
 if (Test-Path -LiteralPath $Runtime -PathType Container) {
-    if ($DryRun) {
+    if ($PreserveRuntime) {
+        Write-Output "保持（未復元の旧設定バックアップがある）: $Runtime"
+    }
+    elseif ($DryRun) {
         Write-Output "リポジトリ内の実行環境削除予定: $Runtime"
     }
     else {
@@ -263,7 +268,10 @@ if (-not $DryRun) {
     }
 }
 if ($RemoveRepository) {
-    if (-not (Get-Command git -ErrorAction SilentlyContinue) -or
+    if ($PreserveRuntime) {
+        Write-Output "リポジトリ保持（旧設定バックアップの復元が未完了）: $Root"
+    }
+    elseif (-not (Get-Command git -ErrorAction SilentlyContinue) -or
         -not (Test-Path -LiteralPath (Join-Path $Root '.git'))) {
         Write-Output "リポジトリ保持（Git管理情報が見つからない）: $Root"
     }
