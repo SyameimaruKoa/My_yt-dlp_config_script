@@ -65,6 +65,33 @@ jobs:
                   python tools/yt_dlp_auto_update.py --help | Out-Null
                   python -m unittest discover -s tests -p 'test_*.py'
                   if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Check Windows uninstall discovery and dry-run
+              shell: powershell
+              run: |
+                  $savedLocal = $env:LOCALAPPDATA
+                  $savedApp = $env:APPDATA
+                  try {
+                      $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'yt-dlp-uninstall-test\local'
+                      $env:APPDATA = Join-Path $env:RUNNER_TEMP 'yt-dlp-uninstall-test\roaming'
+                      New-Item -ItemType Directory -Path $env:LOCALAPPDATA, $env:APPDATA -Force | Out-Null
+                      $empty = @(.\z__uninstall_yt-dlp.ps1 --dry-run)
+                      if (-not ($empty -match '対象なし（旧venv）')) { throw 'Missing install is not reported.' }
+                      $venv = Join-Path $env:LOCALAPPDATA 'yt-dlp\venv'
+                      New-Item -ItemType Directory -Path (Join-Path $venv 'Scripts') -Force | Out-Null
+                      Set-Content -LiteralPath (Join-Path $venv 'pyvenv.cfg') -Value 'home = CI' -Encoding UTF8
+                      Set-Content -LiteralPath (Join-Path $venv 'Scripts\yt-dlp.exe') -Value 'test' -Encoding ASCII
+                      $updater = Join-Path $env:LOCALAPPDATA 'yt-dlp\auto_update.py'
+                      Set-Content -LiteralPath $updater -Value 'yt-dlp-update.lock' -Encoding ASCII
+                      $outputs = @(.\z__uninstall_yt-dlp.ps1 --dry-run)
+                      if (-not ($outputs -match '旧venv削除予定')) { throw 'Legacy venv was not found.' }
+                      if (-not ($outputs -match 'auto_update.py')) { throw 'Legacy updater was not found.' }
+                      if (-not (Test-Path -LiteralPath $updater)) { throw 'Dry-run deleted the updater.' }
+                      if (-not (Test-Path -LiteralPath (Join-Path $venv 'pyvenv.cfg'))) { throw 'Dry-run deleted venv.' }
+                  }
+                  finally {
+                      $env:LOCALAPPDATA = $savedLocal
+                      $env:APPDATA = $savedApp
+                  }
             - name: Check MPC-BE dedicated exe shim
               shell: powershell
               run: |
