@@ -208,9 +208,13 @@ $ShimLines = @(
 [System.IO.File]::WriteAllLines($ShimPath, $ShimLines, [System.Text.Encoding]::GetEncoding(932))
 Set-ManagedJunction -Link $BinDir -Target $RuntimeBinDir -Kind 'bin'
 $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($UserPath -match '(^|;)System\.Object\[\](;|$)') {
+    throw 'ユーザーPATHに破損したSystem.Object[]が含まれておる。元のPATHを復旧するまで上書きせんぞ。'
+}
 $PathParts = @($UserPath -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 if ($PathParts -notcontains $BinDir) {
-    [Environment]::SetEnvironmentVariable('Path', (($BinDir, $PathParts) -join ';'), 'User')
+    $NewUserPath = if ([string]::IsNullOrEmpty($UserPath)) { $BinDir } else { "$BinDir;$UserPath" }
+    [Environment]::SetEnvironmentVariable('Path', $NewUserPath, 'User')
 }
 $env:Path = "$BinDir;$env:Path"
 Write-Output "起動リンク: $(Join-Path $BinDir 'yt-dlp.cmd') -> $ShimPath"
