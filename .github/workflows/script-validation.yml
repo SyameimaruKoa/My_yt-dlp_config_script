@@ -79,6 +79,10 @@ jobs:
                   python tools/yt_dlp_auto_update.py --help | Out-Null
                   python -m unittest discover -s tests -p 'test_*.py'
                   if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed.' }
+            - name: Verify Windows user PATH preservation
+              shell: pwsh
+              run: |
+                  .\tests\check_user_path.ps1
             - name: Run FFmpeg helper via PowerShell with a mocked static-ffmpeg package
               shell: powershell
               run: |
