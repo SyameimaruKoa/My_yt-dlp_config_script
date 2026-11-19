@@ -427,6 +427,15 @@ fi
 case "${1:-}" in
     -h|--help) show_help ;;
 esac
+YTDLP_YOUTUBE=0
+for arg in "$@"; do
+    case "$arg" in
+        *youtube.com*|*youtu.be*|*youtube-nocookie.com*|*ytsearch*|*youtube:*) YTDLP_YOUTUBE=1 ;;
+    esac
+done
+if [ "$YTDLP_YOUTUBE" -eq 1 ]; then
+    exec "$VENV_PYTHON" -m yt_dlp --downloader "http:native" "$@"
+fi
 exec "$VENV_PYTHON" -m yt_dlp "$@"
 EOF_YTDLP_WRAPPER
 } > "$WRAPPER_TMP"
