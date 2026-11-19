@@ -7,6 +7,7 @@
     2. Linux用 --exec (Koa_Discord_Message.sh) をコメントアウト
     3. Windows用 --exec (プレースホルダー %SCRIPT_DIR% を含む行) を
        コメント解除し、パスを $PSScriptRoot に置換
+    4. yt-dlpがBOMからUTF-8を判定できるよう、出力にUTF-8 BOMを付与
 .EXAMPLE
     .\convert_config.ps1
 .NOTES
@@ -73,7 +74,8 @@ try {
         }
     }
 
-    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($false)))
+    # yt-dlpはBOMがないとWindowsのロケール(CP932)で配置を読み込むため、BOMを付与する
+    [System.IO.File]::WriteAllLines($OutputFile, $OutputLines, (New-Object System.Text.UTF8Encoding($true)))
 
     Write-Output "--------------------"
     Write-Output "変換完了！"
